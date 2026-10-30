@@ -16,7 +16,10 @@
 body { margin: 0; }
 
 .app { height: 100vh; display: flex; flex-direction: column; }
-header { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
+header { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 14px; display: flex; gap: 12px; align-items: baseline; }
+header .doc-name { color: var(--ink); }
+header .dirty { color: var(--accent); }
+header .error { margin-left: auto; color: #991b1b; background: #fee2e2; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 .muted { color: var(--muted); }
 
 main { flex: 1; min-height: 0; display: grid; }

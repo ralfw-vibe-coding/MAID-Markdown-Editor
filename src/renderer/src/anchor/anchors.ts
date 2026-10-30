@@ -18,6 +18,7 @@ export type Anchor = {
   suffix: string
   status: AnchorStatus
   comment: string
+  createdAt: string
 }
 
 const CONTEXT = 32
@@ -32,11 +33,14 @@ export function createAnchor(doc: Text, from: number, to: number, comment: strin
     suffix: doc.sliceString(to, Math.min(doc.length, to + CONTEXT)),
     status: 'ok',
     comment,
+    createdAt: new Date().toISOString(),
   }
 }
 
 export const addAnchor = StateEffect.define<Anchor>()
 export const removeAnchor = StateEffect.define<string>()
+/** Ersetzt alle Anker, z. B. nach dem Öffnen eines Dokuments. */
+export const setAnchors = StateEffect.define<Anchor[]>()
 
 /**
  * Hält die Anker im Editorzustand, damit jede Transaktion sie automatisch
@@ -56,7 +60,8 @@ export const anchorField = StateField.define<Anchor[]>({
       })
     }
     for (const e of tr.effects) {
-      if (e.is(addAnchor)) next = [...next, e.value]
+      if (e.is(setAnchors)) next = e.value
+      else if (e.is(addAnchor)) next = [...next, e.value]
       else if (e.is(removeAnchor)) next = next.filter((a) => a.id !== e.value)
     }
     return next

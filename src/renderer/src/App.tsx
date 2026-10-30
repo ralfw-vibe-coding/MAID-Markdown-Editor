@@ -1,13 +1,27 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { basicSetup } from 'codemirror'
+import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
+import type { MaidHost } from '../../shared/host'
 import { buildPreview } from './render/buildPreview'
 import { Preview } from './render/Preview'
 import { domRangeToSource, sourceToDomRange, type SourceRange } from './anchor/selection'
-import { addAnchor, anchorField, createAnchor, removeAnchor, type Anchor } from './anchor/anchors'
+import { addAnchor, anchorField, createAnchor, removeAnchor, setAnchors as setAnchorsEffect, type Anchor } from './anchor/anchors'
 import { sampleDoc } from './sampleDoc'
 import { markdownKeymap } from './editor/markdownKeymap'
+import { useDocumentFile } from './doc/useDocumentFile'
+
+declare global {
+  interface Window {
+    /** Vom Electron-Preload bereitgestellt; fehlt in der reinen Web-Variante. */
+    maid?: MaidHost
+  }
+}
+
+const host = window.maid ?? null
+/** In der App startet MAID mit einem leeren Dokument, im Browser mit dem Probetext. */
+const initialDoc = host ? '' : sampleDoc
 
 type Pending = SourceRange & { x: number; y: number }
 
@@ -39,7 +53,7 @@ export function App() {
   const editorHost = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
-  const [doc, setDoc] = useState(sampleDoc)
+  const [doc, setDoc] = useState(initialDoc)
   const [anchors, setAnchors] = useState<Anchor[]>([])
   const [pending, setPending] = useState<Pending | null>(null)
   const [draft, setDraft] = useState('')
@@ -49,26 +63,44 @@ export function App() {
   const mainRef = useRef<HTMLElement>(null)
   const model = useMemo(() => buildPreview(doc), [doc])
 
+  const extensions = useMemo<Extension[]>(
+    () => [
+      basicSetup,
+      markdown({ addKeymap: false }),
+      markdownKeymap,
+      EditorView.lineWrapping,
+      anchorField,
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged) setDoc(u.state.doc.toString())
+        const next = u.state.field(anchorField)
+        if (next !== u.startState.field(anchorField)) setAnchors(next)
+      }),
+    ],
+    [],
+  )
+
   useEffect(() => {
-    const view = new EditorView({
-      parent: editorHost.current!,
-      doc: sampleDoc,
-      extensions: [
-        basicSetup,
-        markdown({ addKeymap: false }),
-        markdownKeymap,
-        EditorView.lineWrapping,
-        anchorField,
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) setDoc(u.state.doc.toString())
-          const next = u.state.field(anchorField)
-          if (next !== u.startState.field(anchorField)) setAnchors(next)
-        }),
-      ],
-    })
+    const view = new EditorView({ parent: editorHost.current!, doc: initialDoc, extensions })
     viewRef.current = view
     return () => view.destroy()
-  }, [])
+  }, [extensions])
+
+  const file = useDocumentFile({
+    host,
+    initialDoc,
+    doc,
+    anchors,
+    load(content, loaded) {
+      const view = viewRef.current!
+      view.setState(EditorState.create({ doc: content, extensions }))
+      setDoc(content)
+      setAnchors([])
+      view.dispatch({ effects: setAnchorsEffect.of(loaded) })
+      setPending(null)
+      setActiveId(null)
+      view.focus()
+    },
+  })
 
   // Anker in der Druckfahne über die CSS Custom Highlight API markieren – ohne DOM-Umbau.
   useLayoutEffect(() => {
@@ -133,7 +165,23 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <strong>MAID</strong> <span className="muted">Proof of Concept · Anker ohne KI</span>
+        <strong>MAID</strong>
+        {host ? (
+          <span className="doc-name">
+            {file.name}
+            {file.dirty && <span className="dirty" title="Ungesicherte Änderungen"> ●</span>}
+          </span>
+        ) : (
+          <span className="muted">Web-Vorschau ohne Dateizugriff</span>
+        )}
+        {file.error && (
+          <span className="error">
+            {file.error}
+            <button className="link" onClick={file.clearError}>
+              ×
+            </button>
+          </span>
+        )}
       </header>
       <main
         ref={mainRef}
