@@ -6,11 +6,11 @@
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
-    "app": "electron-vite dev",
+    "app": "ELECTRON_EXEC_PATH=node_modules/electron/dist/MAID.app/Contents/MacOS/Electron electron-vite dev",
     "web": "vite",
     "dev": "vite",
     "build": "tsc --noEmit && electron-vite build",
-    "start": "electron-vite preview",
+    "start": "ELECTRON_EXEC_PATH=node_modules/electron/dist/MAID.app/Contents/MacOS/Electron electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
