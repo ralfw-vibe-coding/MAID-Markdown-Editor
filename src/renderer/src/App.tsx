@@ -332,7 +332,7 @@ export function App() {
           <h2>Druckfahne</h2>
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
         </section>
-        <aside className="pane threads">
+        <aside className={`pane threads ${activeId ? 'chat-open' : ''}`}>
           <h2>Kommentare</h2>
           <ThreadPanel
             doc={doc}
@@ -341,7 +341,8 @@ export function App() {
             activeId={activeId}
             busy={busy}
             aiAvailable={!!host}
-            onFocus={focusThread}
+            onOpen={focusThread}
+            onClose={() => setActiveId(null)}
             onSend={send}
             onExecute={(id) => void askAi(id, 'execute')}
             onRevert={revert}
