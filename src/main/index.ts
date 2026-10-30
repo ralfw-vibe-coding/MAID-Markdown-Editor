@@ -184,6 +184,8 @@ app.on('open-file', (e, path) => {
 })
 
 app.whenReady().then(() => {
+  // Das Bundle-Icon steckt in MAID.app; das Dock cached Icons aber hartnäckig.
+  if (!app.isPackaged) app.dock?.setIcon(join(import.meta.dirname, '../../resources/icon.png'))
   // Dateien von der Kommandozeile, z. B. `npm run app -- text.md`
   for (const arg of process.argv.slice(app.isPackaged ? 1 : 2)) {
     if (/\.(md|markdown|txt)$/i.test(arg)) pendingPaths.push(arg)
