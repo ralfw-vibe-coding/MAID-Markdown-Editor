@@ -7,10 +7,23 @@ import type { MaidHost } from '../../shared/host'
 import { buildPreview } from './render/buildPreview'
 import { Preview } from './render/Preview'
 import { domRangeToSource, sourceToDomRange, type SourceRange } from './anchor/selection'
-import { addAnchor, anchorField, createAnchor, removeAnchor, setAnchors as setAnchorsEffect, type Anchor } from './anchor/anchors'
+import {
+  addAnchor,
+  anchorField,
+  anchorHistory,
+  createAnchor,
+  placeAnchor,
+  removeAnchor,
+  setAnchors as setAnchorsEffect,
+  type Anchor,
+} from './anchor/anchors'
 import { sampleDoc } from './sampleDoc'
 import { markdownKeymap } from './editor/markdownKeymap'
 import { useDocumentFile } from './doc/useDocumentFile'
+import { appendMessage, createThread, message, syncEditStates, updateThread, type Thread } from './thread/thread'
+import { ThreadPanel } from './thread/ThreadPanel'
+import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
+import { minimalChange, planEdit } from './ai/planEdit'
 
 declare global {
   interface Window {
@@ -25,7 +38,7 @@ const initialDoc = host ? '' : sampleDoc
 
 type Pending = SourceRange & { x: number; y: number }
 
-const THREADS_WIDTH = 300
+const THREADS_WIDTH = 360
 const SPLITTER_WIDTH = 5
 const SPLIT_KEY = 'maid.split'
 
@@ -55,6 +68,9 @@ export function App() {
   const viewRef = useRef<EditorView | null>(null)
   const [doc, setDoc] = useState(initialDoc)
   const [anchors, setAnchors] = useState<Anchor[]>([])
+  const [threads, setThreads] = useState<Thread[]>([])
+  /** Threads, in denen gerade eine KI-Anfrage läuft. */
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
   const [pending, setPending] = useState<Pending | null>(null)
   const [draft, setDraft] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -62,6 +78,19 @@ export function App() {
   const [dragging, setDragging] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const model = useMemo(() => buildPreview(doc), [doc])
+  // Undo/Redo im Editor im Thread nachziehen, damit Anzeige und KI-Verlauf stimmen.
+  useEffect(() => {
+    setThreads((ts) =>
+      syncEditStates(ts, (id) => {
+        const a = anchors.find((x) => x.id === id)
+        return a && a.from < a.to ? doc.slice(a.from, a.to) : null
+      }),
+    )
+  }, [anchors, doc])
+
+  // Laufende KI-Anfragen brauchen den aktuellen Stand, nicht den ihres Starts.
+  const threadsRef = useRef(threads)
+  threadsRef.current = threads
 
   const extensions = useMemo<Extension[]>(
     () => [
@@ -70,6 +99,7 @@ export function App() {
       markdownKeymap,
       EditorView.lineWrapping,
       anchorField,
+      anchorHistory,
       EditorView.updateListener.of((u) => {
         if (u.docChanged) setDoc(u.state.doc.toString())
         const next = u.state.field(anchorField)
@@ -90,12 +120,15 @@ export function App() {
     initialDoc,
     doc,
     anchors,
-    load(content, loaded) {
+    threads,
+    load(content, loaded, loadedThreads) {
       const view = viewRef.current!
       view.setState(EditorState.create({ doc: content, extensions }))
       setDoc(content)
       setAnchors([])
       view.dispatch({ effects: setAnchorsEffect.of(loaded) })
+      setThreads(loadedThreads)
+      setBusy(new Set())
       setPending(null)
       setActiveId(null)
       view.focus()
@@ -133,14 +166,93 @@ export function App() {
     setDraft('')
   }
 
-  function comment() {
+  function comment(withAi: boolean) {
     const view = viewRef.current
     if (!view || !pending || !draft.trim()) return
-    const anchor = createAnchor(view.state.doc, pending.from, pending.to, draft.trim())
+    const anchor = createAnchor(view.state.doc, pending.from, pending.to)
     view.dispatch({ effects: addAnchor.of(anchor) })
+    const thread = createThread(anchor.id, draft.trim())
+    setThreads((ts) => [...ts, thread])
+    threadsRef.current = [...threadsRef.current, thread]
     setPending(null)
     setActiveId(anchor.id)
     window.getSelection()?.removeAllRanges()
+    if (withAi && host) void askAi(anchor.id, 'discuss')
+  }
+
+  const appendTo = (id: string, m: Parameters<typeof message>[0]) => setThreads((ts) => appendMessage(ts, id, message(m)))
+  const currentAnchor = (id: string) => viewRef.current?.state.field(anchorField).find((a) => a.id === id)
+
+  /**
+   * Ersetzt `oldText` durch `newText` an der Stelle des Threads – als eine
+   * Editor-Transaktion (ein Undo-Schritt). Der Anker wird explizit auf den
+   * Ersatztext gesetzt. Liefert den ersetzten Text oder eine Fehlermeldung.
+   */
+  function replaceAtAnchor(id: string, oldText: string, newText: string): { before: string } | { error: string } {
+    const view = viewRef.current
+    const anchor = currentAnchor(id)
+    if (!view || !anchor) return { error: 'Der Thread hat keine Stelle mehr im Dokument.' }
+    const text = view.state.doc.toString()
+    const plan = planEdit(text, anchor, oldText, newText)
+    if ('error' in plan) return plan
+    const change = minimalChange(text, plan)
+    view.dispatch({
+      changes: { from: change.from, to: change.to, insert: change.insert },
+      effects: placeAnchor.of({ id, from: plan.from, to: plan.from + newText.length, quote: newText, status: 'ok' }),
+      userEvent: 'input.maid',
+    })
+    return { before: text.slice(plan.from, plan.to) }
+  }
+
+  async function askAi(id: string, mode: AskMode) {
+    if (!host) return appendTo(id, { kind: 'error', text: 'Die KI ist nur in der App verfügbar.' })
+    const view = viewRef.current
+    const anchor = currentAnchor(id)
+    const thread = threadsRef.current.find((t) => t.id === id)
+    if (!view || !anchor || !thread) return
+    setBusy((b) => new Set(b).add(id))
+    try {
+      const prompt = buildPrompt({ doc: view.state.doc.toString(), from: anchor.from, to: anchor.to, messages: thread.messages, mode })
+      const result = await host.askAi({ prompt, systemPrompt: SYSTEM_PROMPT, schema: RESPONSE_SCHEMA })
+      if (!result.ok) return appendTo(id, { kind: 'error', text: result.error })
+      const answer = parseAnswer(result.data)
+      appendTo(id, { kind: 'ai', text: answer.reply })
+      if (answer.edit) {
+        const done = replaceAtAnchor(id, answer.edit.oldText, answer.edit.newText)
+        appendTo(id, 'error' in done ? { kind: 'error', text: done.error } : { kind: 'edit', before: done.before, after: answer.edit.newText })
+      }
+    } catch (err) {
+      appendTo(id, { kind: 'error', text: (err as Error).message })
+    } finally {
+      setBusy((b) => {
+        const next = new Set(b)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
+  function send(id: string, text: string) {
+    appendTo(id, { kind: 'user', text })
+    // Der neue Beitrag ist erst nach dem nächsten Render im Thread; askAi liest über die Ref.
+    threadsRef.current = appendMessage(threadsRef.current, id, message({ kind: 'user', text }))
+    if (host) void askAi(id, 'discuss')
+  }
+
+  function revert(id: string, messageId: string) {
+    const m = threadsRef.current.find((t) => t.id === id)?.messages.find((x) => x.id === messageId)
+    if (!m || m.kind !== 'edit') return
+    const done = replaceAtAnchor(id, m.after, m.before)
+    if ('error' in done) return appendTo(id, { kind: 'error', text: done.error })
+    setThreads((ts) =>
+      updateThread(ts, id, (t) => ({ ...t, messages: t.messages.map((x) => (x.id === messageId ? { ...x, reverted: true } : x)) })),
+    )
+  }
+
+  function removeThread(id: string) {
+    viewRef.current?.dispatch({ effects: removeAnchor.of(id) })
+    setThreads((ts) => ts.filter((t) => t.id !== id))
+    if (activeId === id) setActiveId(null)
   }
 
   function onSplitterMove(e: PointerEvent<HTMLDivElement>) {
@@ -151,8 +263,10 @@ export function App() {
     setSplit(clampSplit((e.clientX - rect.left) / width))
   }
 
-  function focusAnchor(a: Anchor) {
-    setActiveId(a.id)
+  function focusThread(id: string) {
+    const a = currentAnchor(id)
+    setActiveId(id)
+    if (!a) return
     const view = viewRef.current
     if (view && a.from < a.to) {
       view.dispatch({ selection: { anchor: a.from, head: a.to }, scrollIntoView: true })
@@ -220,32 +334,19 @@ export function App() {
         </section>
         <aside className="pane threads">
           <h2>Kommentare</h2>
-          {anchors.length === 0 && <p className="muted">Text in der Druckfahne markieren, um einen Kommentar anzulegen.</p>}
-          {anchors.map((a) => (
-            <article
-              key={a.id}
-              className={`thread ${a.id === activeId ? 'active' : ''}`}
-              onClick={() => focusAnchor(a)}
-            >
-              <div className="thread-head">
-                <span className={`status status-${a.status}`}>{a.status}</span>
-                <button
-                  className="link"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    viewRef.current?.dispatch({ effects: removeAnchor.of(a.id) })
-                  }}
-                >
-                  entfernen
-                </button>
-              </div>
-              <blockquote>{a.from < a.to ? doc.slice(a.from, a.to) : a.quote}</blockquote>
-              <p>{a.comment}</p>
-              <code className="range">
-                [{a.from}, {a.to})
-              </code>
-            </article>
-          ))}
+          <ThreadPanel
+            doc={doc}
+            anchors={anchors}
+            threads={threads}
+            activeId={activeId}
+            busy={busy}
+            aiAvailable={!!host}
+            onFocus={focusThread}
+            onSend={send}
+            onExecute={(id) => void askAi(id, 'execute')}
+            onRevert={revert}
+            onRemove={removeThread}
+          />
         </aside>
       </main>
 
@@ -256,19 +357,24 @@ export function App() {
           </div>
           <textarea
             autoFocus
-            placeholder="Kommentar …"
+            placeholder={host ? 'Was stört dich an der Stelle? (⌘↩ an die KI)' : 'Kommentar …'}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) comment()
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) comment(!!host)
               if (e.key === 'Escape') setPending(null)
             }}
           />
           <div className="actions">
             <button onClick={() => setPending(null)}>Abbrechen</button>
-            <button className="primary" disabled={!draft.trim()} onClick={comment}>
-              Kommentieren
+            <button disabled={!draft.trim()} onClick={() => comment(false)}>
+              Nur notieren
             </button>
+            {host && (
+              <button className="primary" disabled={!draft.trim()} onClick={() => comment(true)}>
+                Mit KI besprechen
+              </button>
+            )}
           </div>
         </div>
       )}

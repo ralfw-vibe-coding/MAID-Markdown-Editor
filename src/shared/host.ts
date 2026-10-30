@@ -11,7 +11,18 @@ export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose'
 
 export type DiscardChoice = 'save' | 'discard' | 'cancel'
 
+export type AiRequest = {
+  prompt: string
+  systemPrompt: string
+  /** JSON-Schema der erwarteten Antwort. */
+  schema: object
+}
+
+export type AiResult = { ok: true; data: unknown } | { ok: false; error: string }
+
 export interface MaidHost {
+  /** Fragt Claude (über die lokale Claude CLI, ohne Werkzeuge) und liefert die strukturierte Antwort. */
+  askAi(request: AiRequest): Promise<AiResult>
   openDialog(): Promise<string | null>
   saveDialog(suggestedName: string): Promise<string | null>
   read(path: string): Promise<OpenedFile>
@@ -43,4 +54,5 @@ export const channels = {
   menu: 'menu:command',
   openPath: 'doc:open-path',
   ready: 'renderer:ready',
+  askAi: 'ai:ask',
 } as const

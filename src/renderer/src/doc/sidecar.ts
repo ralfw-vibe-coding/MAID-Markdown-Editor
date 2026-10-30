@@ -1,5 +1,6 @@
 import type { Anchor } from '../anchor/anchors'
 import { reanchor, type StoredAnchor } from '../anchor/reanchor'
+import type { Message, Thread } from '../thread/thread'
 
 /**
  * Begleitdatei `<dokument>.md.maid.json`: Kommentar-Threads und ihre Anker.
@@ -16,14 +17,15 @@ export type Sidecar = {
   threads: StoredThread[]
 }
 
-export type StoredMessage = { author: 'user' | 'ai'; text: string; at: string }
-
 export type StoredThread = {
   id: string
   createdAt: string
   anchor: StoredAnchor
-  messages: StoredMessage[]
+  messages: Message[]
 }
+
+/** Frühe Fassung der Nachrichten (nur Autor-Kommentar). */
+type LegacyMessage = { author: 'user' | 'ai'; text: string; at: string }
 
 const CONTEXT = 32
 
@@ -32,18 +34,15 @@ export async function contentHash(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Liefert null, wenn es keine Kommentare gibt – dann wird keine Begleitdatei geschrieben. */
-export function serializeSidecar(doc: string, anchors: Anchor[], documentName: string, hash: string): string | null {
-  if (anchors.length === 0) return null
-  const sidecar: Sidecar = {
-    format: 'maid-sidecar',
-    version: 1,
-    document: documentName,
-    contentHash: hash,
-    savedAt: new Date().toISOString(),
-    threads: anchors.map((a) => ({
-      id: a.id,
-      createdAt: a.createdAt,
+/** Liefert null, wenn es keine Threads gibt – dann wird keine Begleitdatei geschrieben. */
+export function serializeSidecar(doc: string, anchors: Anchor[], threads: Thread[], documentName: string, hash: string): string | null {
+  const stored: StoredThread[] = []
+  for (const t of threads) {
+    const a = anchors.find((x) => x.id === t.id)
+    if (!a) continue
+    stored.push({
+      id: t.id,
+      createdAt: t.createdAt,
       anchor: {
         from: a.from,
         to: a.to,
@@ -53,8 +52,17 @@ export function serializeSidecar(doc: string, anchors: Anchor[], documentName: s
         suffix: doc.slice(a.to, a.to + CONTEXT),
         status: a.status,
       },
-      messages: [{ author: 'user', text: a.comment, at: a.createdAt }],
-    })),
+      messages: t.messages,
+    })
+  }
+  if (stored.length === 0) return null
+  const sidecar: Sidecar = {
+    format: 'maid-sidecar',
+    version: 1,
+    document: documentName,
+    contentHash: hash,
+    savedAt: new Date().toISOString(),
+    threads: stored,
   }
   return JSON.stringify(sidecar, null, 2) + '\n'
 }
@@ -64,13 +72,18 @@ export function parseSidecar(json: string): Sidecar {
   if (data?.format !== 'maid-sidecar' || data.version !== 1 || !Array.isArray(data.threads)) {
     throw new Error('Unbekanntes Format der Begleitdatei')
   }
+  for (const t of data.threads) {
+    t.messages = (t.messages as (Message | LegacyMessage)[]).map((m) =>
+      'kind' in m ? m : { id: crypto.randomUUID(), kind: m.author, text: m.text, at: m.at },
+    )
+  }
   return data
 }
 
-/** Stellt die Anker eines geöffneten Dokuments aus der Begleitdatei wieder her. */
-export function restoreAnchors(doc: string, sidecar: Sidecar, hash: string): Anchor[] {
+/** Stellt Anker und Threads eines geöffneten Dokuments aus der Begleitdatei wieder her. */
+export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { anchors: Anchor[]; threads: Thread[] } {
   const unchanged = sidecar.contentHash === hash
-  return sidecar.threads.map((t) => {
+  const anchors = sidecar.threads.map((t): Anchor => {
     const placed = reanchor(doc, t.anchor, unchanged)
     return {
       id: t.id,
@@ -78,8 +91,8 @@ export function restoreAnchors(doc: string, sidecar: Sidecar, hash: string): Anc
       quote: t.anchor.quote,
       prefix: doc.slice(Math.max(0, placed.from - CONTEXT), placed.from),
       suffix: doc.slice(placed.to, placed.to + CONTEXT),
-      comment: t.messages.find((m) => m.author === 'user')?.text ?? '',
-      createdAt: t.createdAt,
     }
   })
+  const threads = sidecar.threads.map((t): Thread => ({ id: t.id, createdAt: t.createdAt, messages: t.messages }))
+  return { anchors, threads }
 }

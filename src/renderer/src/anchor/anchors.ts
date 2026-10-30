@@ -1,5 +1,6 @@
 import { StateEffect, StateField, type Text } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
+import { invertedEffects } from '@codemirror/commands'
 
 /**
  * ok: Zitat steht unverändert im Anker.
@@ -8,6 +9,7 @@ import { Decoration, EditorView } from '@codemirror/view'
  */
 export type AnchorStatus = 'ok' | 'geändert' | 'verloren'
 
+/** Position eines Kommentar-Threads im Markdown; `id` ist zugleich die Thread-ID. */
 export type Anchor = {
   id: string
   from: number
@@ -17,13 +19,11 @@ export type Anchor = {
   prefix: string
   suffix: string
   status: AnchorStatus
-  comment: string
-  createdAt: string
 }
 
 const CONTEXT = 32
 
-export function createAnchor(doc: Text, from: number, to: number, comment: string): Anchor {
+export function createAnchor(doc: Text, from: number, to: number): Anchor {
   return {
     id: crypto.randomUUID(),
     from,
@@ -32,8 +32,6 @@ export function createAnchor(doc: Text, from: number, to: number, comment: strin
     prefix: doc.sliceString(Math.max(0, from - CONTEXT), from),
     suffix: doc.sliceString(to, Math.min(doc.length, to + CONTEXT)),
     status: 'ok',
-    comment,
-    createdAt: new Date().toISOString(),
   }
 }
 
@@ -41,6 +39,17 @@ export const addAnchor = StateEffect.define<Anchor>()
 export const removeAnchor = StateEffect.define<string>()
 /** Ersetzt alle Anker, z. B. nach dem Öffnen eines Dokuments. */
 export const setAnchors = StateEffect.define<Anchor[]>()
+
+type AnchorPlacement = { id: string; from: number; to: number; quote: string; status: AnchorStatus }
+
+/**
+ * Setzt einen Anker explizit, z. B. auf den Ersatztext einer KI-Änderung.
+ * Wird nach dem Mapping der Transaktion angewendet; Positionen beziehen sich
+ * also auf das Dokument nach der Änderung.
+ */
+export const placeAnchor = StateEffect.define<AnchorPlacement>({
+  map: (v, changes) => ({ ...v, from: changes.mapPos(v.from, 1), to: Math.max(changes.mapPos(v.from, 1), changes.mapPos(v.to, -1)) }),
+})
 
 /**
  * Hält die Anker im Editorzustand, damit jede Transaktion sie automatisch
@@ -63,6 +72,10 @@ export const anchorField = StateField.define<Anchor[]>({
       if (e.is(setAnchors)) next = e.value
       else if (e.is(addAnchor)) next = [...next, e.value]
       else if (e.is(removeAnchor)) next = next.filter((a) => a.id !== e.value)
+      else if (e.is(placeAnchor)) {
+        const p = e.value
+        next = next.map((a) => (a.id === p.id ? { ...a, from: p.from, to: p.to, quote: p.quote, status: p.status } : a))
+      }
     }
     return next
   },
@@ -75,4 +88,27 @@ export const anchorField = StateField.define<Anchor[]>({
         true,
       ),
     ),
+})
+
+/**
+ * Undo/Redo stellt Anker wieder her, die eine Transaktion explizit versetzt
+ * oder durch Löschung geleert hat – sonst bliebe ein Anker nach Cmd+Z leer.
+ */
+export const anchorHistory = invertedEffects.of((tr) => {
+  if (!tr.docChanged && !tr.effects.some((e) => e.is(placeAnchor))) return []
+  const before = tr.startState.field(anchorField, false)
+  const after = tr.state.field(anchorField, false)
+  if (!before || !after) return []
+  const restore: StateEffect<unknown>[] = []
+  for (const old of before) {
+    const now = after.find((a) => a.id === old.id)
+    if (!now) continue
+    const placed = tr.effects.some((e) => e.is(placeAnchor) && e.value.id === old.id)
+    const emptied = old.from < old.to && now.from === now.to
+    if (placed || emptied) {
+      // Positionen im Dokument vor der Transaktion = nach dem Rückgängigmachen.
+      restore.push(placeAnchor.of({ id: old.id, from: old.from, to: old.to, quote: old.quote, status: old.status }))
+    }
+  }
+  return restore
 })

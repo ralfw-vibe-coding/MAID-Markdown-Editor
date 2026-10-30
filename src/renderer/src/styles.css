@@ -56,20 +56,42 @@ main.dragging { cursor: col-resize; user-select: none; }
 ::highlight(maid-pending) { background-color: rgba(59, 130, 246, 0.3); }
 
 .threads { padding-bottom: 24px; border-right: none; }
-.threads > p { padding: 0 16px; font-size: 13px; }
+.threads-empty { padding: 0 16px; font-size: 13px; }
 .thread { margin: 10px 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); cursor: pointer; font-size: 13px; }
-.thread.active { border-color: var(--accent); }
+.thread.active { border-color: var(--accent); cursor: default; box-shadow: 0 2px 10px rgba(0, 0, 0, .05); }
 .thread blockquote { margin: 6px 0; padding-left: 8px; border-left: 3px solid var(--anchor-active); font-family: Georgia, serif; }
-.thread p { margin: 6px 0; }
+.thread blockquote.anchor-verloren { border-left-color: #fca5a5; color: var(--muted); text-decoration: line-through; }
+.thread blockquote.anchor-geändert { border-left-color: #93c5fd; }
+.thread .snippet { margin: 4px 0; color: #4b4740; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.thread .who { color: var(--muted); }
+.thread-meta { font-size: 11px; }
 .thread-head { display: flex; justify-content: space-between; align-items: center; }
 .status { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #ecfccb; color: #3f6212; }
 .status-geändert { background: #dbeafe; color: #1e40af; }
 .status-verloren { background: #fee2e2; color: #991b1b; }
-.range { color: var(--muted); font-size: 11px; }
+
+.messages { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.msg { padding: 6px 9px; border-radius: 8px; white-space: pre-wrap; line-height: 1.45; }
+.msg-user { align-self: flex-end; max-width: 90%; background: #f1efe9; }
+.msg-ai { align-self: flex-start; max-width: 95%; background: #fff7ed; border: 1px solid #fed7aa; }
+.msg-ai.thinking { color: var(--muted); font-style: italic; }
+.msg-error { background: #fee2e2; color: #991b1b; font-size: 12px; }
+.msg-edit { border: 1px dashed var(--line); background: #fafaf9; font-size: 12px; }
+.msg-edit.reverted { opacity: .6; }
+.edit-head { display: flex; justify-content: space-between; color: var(--muted); margin-bottom: 4px; }
+.diff { font-family: Georgia, serif; font-size: 13px; }
+.diff del { background: #fee2e2; color: #991b1b; }
+.diff ins { background: #dcfce7; color: #166534; text-decoration: none; }
+
+.thread textarea { width: 100%; min-height: 54px; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+.thread .actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+.thread .actions button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; }
+.thread .actions button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+.thread .actions button:disabled { opacity: .5; cursor: default; }
 button.link { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 12px; }
 
 .popover {
-  position: fixed; z-index: 10; width: 320px; padding: 10px; background: var(--paper);
+  position: fixed; z-index: 10; width: 360px; padding: 10px; background: var(--paper);
   border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .12); font-size: 13px;
 }
 .popover .src { color: var(--muted); margin-bottom: 6px; word-break: break-all; }

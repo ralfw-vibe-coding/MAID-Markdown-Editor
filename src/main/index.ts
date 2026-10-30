@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions } from 'electron'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { channels, SIDECAR_SUFFIX, type DiscardChoice, type MenuCommand, type OpenedFile } from '../shared/host'
+import { channels, SIDECAR_SUFFIX, type AiRequest, type DiscardChoice, type MenuCommand, type OpenedFile } from '../shared/host'
+import { askClaude } from './ai'
 
 let win: BrowserWindow | null = null
 let rendererReady = false
@@ -127,6 +128,8 @@ function registerIpc() {
   })
 
   ipcMain.handle(channels.confirmDiscard, (_e, name: string) => askDiscard(win!, name))
+
+  ipcMain.handle(channels.askAi, (_e, request: AiRequest) => askClaude(request))
 
   ipcMain.on(channels.documentState, (_e, state: { path: string | null; dirty: boolean }) => {
     dirty = state.dirty

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MaidHost, MenuCommand } from '../../../shared/host'
 import type { Anchor } from '../anchor/anchors'
-import { contentHash, parseSidecar, restoreAnchors, serializeSidecar } from './sidecar'
+import type { Thread } from '../thread/thread'
+import { contentHash, parseSidecar, restoreThreads, serializeSidecar } from './sidecar'
 
 const fileName = (path: string | null) => (path ? path.split('/').pop()! : 'Unbenannt')
 
@@ -10,7 +11,7 @@ function sameAnchors(a: Anchor[], b: Anchor[]): boolean {
     a.length === b.length &&
     a.every((x, i) => {
       const y = b[i]
-      return x.id === y.id && x.from === y.from && x.to === y.to && x.status === y.status && x.comment === y.comment
+      return x.id === y.id && x.from === y.from && x.to === y.to && x.status === y.status
     })
   )
 }
@@ -20,21 +21,23 @@ type Options = {
   initialDoc: string
   doc: string
   anchors: Anchor[]
-  /** Lädt Text und Anker in den Editor (setzt Undo-Historie zurück). */
-  load: (content: string, anchors: Anchor[]) => void
+  threads: Thread[]
+  /** Lädt Text, Anker und Threads (setzt die Undo-Historie zurück). */
+  load: (content: string, anchors: Anchor[], threads: Thread[]) => void
 }
 
 /**
  * Datei-Lebenszyklus des aktuellen Dokuments: Neu, Öffnen, Sichern, Sichern unter,
  * ungesicherte Änderungen. Kommentare werden in der Begleitdatei mitgesichert.
  */
-export function useDocumentFile({ host, initialDoc, doc, anchors, load }: Options) {
+export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load }: Options) {
   const [path, setPath] = useState<string | null>(null)
-  const [saved, setSaved] = useState<{ doc: string; anchors: Anchor[] }>({ doc: initialDoc, anchors: [] })
+  const [saved, setSaved] = useState<{ doc: string; anchors: Anchor[]; threads: Thread[] }>({ doc: initialDoc, anchors: [], threads: [] })
   /** Begleitdatei war nicht lesbar: beim Sichern nicht überschreiben. */
   const [keepSidecar, setKeepSidecar] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const dirty = doc !== saved.doc || !sameAnchors(anchors, saved.anchors)
+  const threadsChanged = threads !== saved.threads && (threads.length > 0 || saved.threads.length > 0)
+  const dirty = doc !== saved.doc || threadsChanged || !sameAnchors(anchors, saved.anchors)
   const name = fileName(path)
 
   async function save(asNew = false): Promise<boolean> {
@@ -42,12 +45,15 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, load }: Option
     const target = asNew || !path ? await host.saveDialog(path ? name : 'Unbenannt.md') : path
     if (!target) return false
     const content = doc
-    const current = anchors
-    const sidecar = keepSidecar && current.length === 0 ? undefined : serializeSidecar(content, current, fileName(target), await contentHash(content))
+    const current = { anchors, threads }
+    const sidecar =
+      keepSidecar && threads.length === 0
+        ? undefined
+        : serializeSidecar(content, anchors, threads, fileName(target), await contentHash(content))
     await host.write(target, content, sidecar)
     setPath(target)
-    setSaved({ doc: content, anchors: current })
-    if (current.length > 0) setKeepSidecar(false)
+    setSaved({ doc: content, ...current })
+    if (threads.length > 0) setKeepSidecar(false)
     return true
   }
 
@@ -62,9 +68,9 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, load }: Option
 
   async function newDocument() {
     if (!(await confirmLeave())) return
-    load('', [])
+    load('', [], [])
     setPath(null)
-    setSaved({ doc: '', anchors: [] })
+    setSaved({ doc: '', anchors: [], threads: [] })
     setKeepSidecar(false)
   }
 
@@ -73,19 +79,19 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, load }: Option
     const chosen = target ?? (await host.openDialog())
     if (!chosen) return
     const file = await host.read(chosen)
-    let restored: Anchor[] = []
+    let restored: { anchors: Anchor[]; threads: Thread[] } = { anchors: [], threads: [] }
     let sidecarBroken = false
     if (file.sidecar !== null) {
       try {
-        restored = restoreAnchors(file.content, parseSidecar(file.sidecar), await contentHash(file.content))
+        restored = restoreThreads(file.content, parseSidecar(file.sidecar), await contentHash(file.content))
       } catch (err) {
         sidecarBroken = true
         setError(`Kommentare konnten nicht gelesen werden (${(err as Error).message}). Die Begleitdatei bleibt unverändert.`)
       }
     }
-    load(file.content, restored)
+    load(file.content, restored.anchors, restored.threads)
     setPath(chosen)
-    setSaved({ doc: file.content, anchors: restored })
+    setSaved({ doc: file.content, ...restored })
     setKeepSidecar(sidecarBroken)
   }
 
