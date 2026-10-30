@@ -7,6 +7,7 @@ import { Preview } from './render/Preview'
 import { domRangeToSource, sourceToDomRange, type SourceRange } from './anchor/selection'
 import { addAnchor, anchorField, createAnchor, removeAnchor, type Anchor } from './anchor/anchors'
 import { sampleDoc } from './sampleDoc'
+import { markdownKeymap } from './editor/markdownKeymap'
 
 type Pending = SourceRange & { x: number; y: number }
 
@@ -54,7 +55,8 @@ export function App() {
       doc: sampleDoc,
       extensions: [
         basicSetup,
-        markdown(),
+        markdown({ addKeymap: false }),
+        markdownKeymap,
         EditorView.lineWrapping,
         anchorField,
         EditorView.updateListener.of((u) => {
