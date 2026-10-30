@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { basicSetup } from 'codemirror'
 import { EditorView } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
@@ -10,6 +10,30 @@ import { sampleDoc } from './sampleDoc'
 
 type Pending = SourceRange & { x: number; y: number }
 
+const THREADS_WIDTH = 300
+const SPLITTER_WIDTH = 5
+const SPLIT_KEY = 'maid.split'
+
+const clampSplit = (v: number) => Math.min(0.85, Math.max(0.15, v))
+
+/** Anteil des Manuskripts an der Breite von Manuskript + Druckfahne. */
+function loadSplit(): number {
+  try {
+    const v = Number(localStorage.getItem(SPLIT_KEY))
+    return v ? clampSplit(v) : 0.5
+  } catch {
+    return 0.5
+  }
+}
+
+function saveSplit(v: number) {
+  try {
+    localStorage.setItem(SPLIT_KEY, String(v))
+  } catch {
+    // ohne Speicher bleibt die Breite nur bis zum Neuladen
+  }
+}
+
 export function App() {
   const editorHost = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
@@ -19,6 +43,9 @@ export function App() {
   const [pending, setPending] = useState<Pending | null>(null)
   const [draft, setDraft] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [split, setSplit] = useState(loadSplit)
+  const [dragging, setDragging] = useState(false)
+  const mainRef = useRef<HTMLElement>(null)
   const model = useMemo(() => buildPreview(doc), [doc])
 
   useEffect(() => {
@@ -82,6 +109,14 @@ export function App() {
     window.getSelection()?.removeAllRanges()
   }
 
+  function onSplitterMove(e: PointerEvent<HTMLDivElement>) {
+    const main = mainRef.current
+    if (!dragging || !main) return
+    const rect = main.getBoundingClientRect()
+    const width = rect.width - THREADS_WIDTH - SPLITTER_WIDTH
+    setSplit(clampSplit((e.clientX - rect.left) / width))
+  }
+
   function focusAnchor(a: Anchor) {
     setActiveId(a.id)
     const view = viewRef.current
@@ -98,11 +133,37 @@ export function App() {
       <header>
         <strong>MAID</strong> <span className="muted">Proof of Concept · Anker ohne KI</span>
       </header>
-      <main>
-        <section className="pane">
+      <main
+        ref={mainRef}
+        className={dragging ? 'dragging' : undefined}
+        style={{
+          gridTemplateColumns: `minmax(0, ${split}fr) ${SPLITTER_WIDTH}px minmax(0, ${1 - split}fr) ${THREADS_WIDTH}px`,
+        }}
+      >
+        <section className="pane manuscript">
           <h2>Manuskript</h2>
           <div className="editor" ref={editorHost} />
         </section>
+        <div
+          className="splitter"
+          role="separator"
+          aria-orientation="vertical"
+          title="Ziehen zum Ändern der Breite, Doppelklick setzt zurück"
+          onPointerDown={(e) => {
+            e.preventDefault()
+            e.currentTarget.setPointerCapture(e.pointerId)
+            setDragging(true)
+          }}
+          onPointerMove={onSplitterMove}
+          onPointerUp={() => {
+            setDragging(false)
+            saveSplit(split)
+          }}
+          onDoubleClick={() => {
+            setSplit(0.5)
+            saveSplit(0.5)
+          }}
+        />
         <section className="pane">
           <h2>Druckfahne</h2>
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />

@@ -19,7 +19,13 @@ body { margin: 0; }
 header { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
 .muted { color: var(--muted); }
 
-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr 300px; }
+main { flex: 1; min-height: 0; display: grid; }
+main.dragging { cursor: col-resize; user-select: none; }
+.pane.manuscript { border-right: none; }
+.splitter { position: relative; cursor: col-resize; background: var(--bg); border-left: 1px solid var(--line); border-right: 1px solid var(--line); touch-action: none; }
+/* breitere, unsichtbare Griff-Fläche */
+.splitter::before { content: ''; position: absolute; inset: 0 -5px; z-index: 2; }
+.splitter:hover, main.dragging .splitter { background: var(--line); }
 .pane { min-height: 0; overflow: auto; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
 .pane > h2 {
   margin: 0; padding: 8px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
