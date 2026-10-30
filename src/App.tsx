@@ -54,7 +54,10 @@ export function App() {
     }
     CSS.highlights.set('maid-anchor', new Highlight(...all))
     CSS.highlights.set('maid-active', new Highlight(...active))
-  }, [model, anchors, activeId])
+    // Die Browser-Auswahl geht verloren, sobald das Kommentarfeld den Fokus bekommt.
+    const pendingRange = pending && sourceToDomRange(pending, root, model.segments)
+    CSS.highlights.set('maid-pending', new Highlight(...(pendingRange ? [pendingRange] : [])))
+  }, [model, anchors, activeId, pending])
 
   function onPreviewMouseUp() {
     const sel = window.getSelection()

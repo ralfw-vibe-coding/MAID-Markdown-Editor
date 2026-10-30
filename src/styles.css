@@ -44,6 +44,7 @@ main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr 300
 
 ::highlight(maid-anchor) { background-color: var(--anchor); }
 ::highlight(maid-active) { background-color: var(--anchor-active); }
+::highlight(maid-pending) { background-color: rgba(59, 130, 246, 0.3); }
 
 .threads { padding-bottom: 24px; border-right: none; }
 .threads > p { padding: 0 16px; font-size: 13px; }
