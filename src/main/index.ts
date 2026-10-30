@@ -174,6 +174,9 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// Name für Menü „Über …“/„… beenden“; Dock und ⌘-Tab nehmen ihn aus dem Bundle (scripts/brand-electron.mjs).
+app.setName('MAID')
+
 // Kann vor `ready` kommen, z. B. beim Start per Doppelklick auf eine .md-Datei.
 app.on('open-file', (e, path) => {
   e.preventDefault()
