@@ -139,11 +139,12 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
       <div className="composer">
         <textarea
           autoFocus
-          placeholder={aiAvailable ? 'Antworten … (⌘↩ senden)' : 'Notiz …'}
+          placeholder={aiAvailable ? 'Antworten … (↩ senden, ⇧↩ neue Zeile)' : 'Notiz … (↩ senden, ⇧↩ neue Zeile)'}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            // Wie im Chat: ↩ sendet, ⇧↩ macht eine neue Zeile.
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               send()
             }

@@ -487,11 +487,15 @@ export function App() {
           </div>
           <textarea
             autoFocus
-            placeholder={host ? 'Was stört dich an der Stelle? (⌘↩ an die KI)' : 'Kommentar …'}
+            placeholder={host ? 'Was stört dich an der Stelle? (↩ an die KI, ⇧↩ neue Zeile)' : 'Kommentar … (↩ notieren, ⇧↩ neue Zeile)'}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) comment(!!host)
+              // Wie im Chat: ↩ sendet, ⇧↩ macht eine neue Zeile.
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                comment(!!host)
+              }
               if (e.key === 'Escape') setPending(null)
             }}
           />
