@@ -76,7 +76,7 @@ Bewusst festgehaltene Fassungen markieren, was dir etwas bedeutet; die automatis
 ## Weitere Funktionen
 
 - **Formatieren** mit Menü „Format“, Symbolleiste und Kürzeln: Fett ⌘B, Kursiv ⌘I, Unterstrichen ⌘U, Durchgestrichen ⇧⌘X, Hervorgehoben ⇧⌘H (`==…==`), Link ⌘K.
-- **Bilder** per ⌘V oder Ziehen ins Manuskript; sie landen im Ordner `<Name> - Images` neben dem Dokument. In der Druckfahne lässt sich die Anzeigegröße mit einem Griff ziehen (gespeichert als `![Alt|300](…)` wie in Obsidian). Bilder werden nie aufgeräumt – jede alte Fassung findet ihre Bilder wieder.
+- **Bilder** per ⌘V oder Ziehen ins Manuskript; sie landen im Ordner `<Datei>.md - Images` neben dem Dokument (im Finder direkt darunter). In der Druckfahne lässt sich die Anzeigegröße mit einem Griff ziehen (gespeichert als `![Alt|300](…)` wie in Obsidian). Bilder werden nie aufgeräumt – jede alte Fassung findet ihre Bilder wieder.
 - **Mitlaufendes Scrollen** zwischen Manuskript und Druckfahne (Kette im Titel der Druckfahne); ein Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript.
 - **Mehrere Fenster**, eine Datei je Fenster.
 - **Spalten** lassen sich wegklappen und in der Breite ziehen.
@@ -88,7 +88,7 @@ Bewusst festgehaltene Fassungen markieren, was dir etwas bedeutet; die automatis
 Vom Wert der Pause.md                    ← das Manuskript, reines Markdown
 Vom Wert der Pause.md.maid.json          ← Kommentare, Anker, Chats
 Vom Wert der Pause.md.versions.json      ← Fassungen
-Vom Wert der Pause - Images/             ← eingefügte Bilder
+Vom Wert der Pause.md - Images/          ← eingefügte Bilder
 ```
 
 Alles ist lesbares JSON bzw. normale Dateien. Das `.md` öffnet sich in jedem anderen Editor; beim Kopieren oder Weitergeben einfach die Begleitdateien mitnehmen.

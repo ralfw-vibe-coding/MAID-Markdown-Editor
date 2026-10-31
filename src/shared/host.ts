@@ -98,9 +98,9 @@ export const SIDECAR_SUFFIX = '.maid.json'
 /** Versionen eines Dokuments liegen in `<datei>.versions.json` daneben. */
 export const VERSIONS_SUFFIX = '.versions.json'
 
-/** Bilder eines Dokuments liegen neben ihm in „<Name ohne Endung> - Images“. */
+/** Bilder eines Dokuments liegen neben ihm in „<datei>.md - Images“ – im Finder direkt unter der Datei. */
 export function imagesFolderName(documentFileName: string): string {
-  return `${documentFileName.replace(/\.(md|markdown|txt)$/i, '')} - Images`
+  return `${documentFileName} - Images`
 }
 
 /** Protokoll, über das die Druckfahne lokale Bilder lädt: maid-file://local/<absoluter Pfad>. */

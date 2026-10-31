@@ -38,8 +38,8 @@ Alle Positionen sind UTF-16-Code-Unit-Offsets in den Markdown-Quelltext (wie JS-
 
 ## E6 · Bilder
 
-- Eingefügte Bilder (Zwischenablage, Ziehen) liegen neben dem Dokument im Ordner `<Name ohne .md> - Images`, z. B. `test gedicht.md` → `test gedicht - Images/bild-2026-10-31-181220.png`.
-- Verweis im Markdown relativ, in spitzen Klammern wegen der Leerzeichen: `![](<test gedicht - Images/bild-….png>)`.
+- Eingefügte Bilder (Zwischenablage, Ziehen) liegen neben dem Dokument im Ordner `<Datei>.md - Images`, z. B. `test gedicht.md` → `test gedicht.md - Images/bild-2026-10-31-181220.png`. Die Endung bleibt im Namen, damit der Ordner im Finder direkt unter der Datei steht.
+- Verweis im Markdown relativ, in spitzen Klammern wegen der Leerzeichen: `![](<test gedicht.md - Images/bild-….png>)`.
 - Anzeigebreite in der Druckfahne wie in Obsidian im Alt-Text: `![Foto|300](…)`. Andere Markdown-Programme zeigen das Bild trotzdem; nur der Alt-Text enthält dann „|300“.
 - Ein neues, noch nie gesichertes Dokument wird vor dem ersten Bild gesichert – sonst gäbe es keinen Ort für den Bilderordner.
 

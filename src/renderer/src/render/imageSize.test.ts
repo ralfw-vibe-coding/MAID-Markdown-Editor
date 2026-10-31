@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { imageExtension, imageMarkdown, parseAltSize, setImageWidth } from './imageSize'
 import { buildPreview } from './buildPreview'
+import { imagesFolderName } from '../../../shared/host'
 
 describe('Bildgröße im Alt-Text', () => {
   it('liest „|Breite“ am Ende des Alt-Texts', () => {
@@ -17,7 +18,11 @@ describe('Bildgröße im Alt-Text', () => {
   })
 
   it('Bildverweis mit Leerzeichen im Pfad', () => {
-    expect(imageMarkdown('test gedicht - Images/bild-1.png')).toBe('![](<test gedicht - Images/bild-1.png>)')
+    expect(imageMarkdown('test gedicht.md - Images/bild-1.png')).toBe('![](<test gedicht.md - Images/bild-1.png>)')
+  })
+
+  it('Bilderordner heißt wie die Datei samt Endung – im Finder direkt darunter', () => {
+    expect(imagesFolderName('test gedicht.md')).toBe('test gedicht.md - Images')
   })
 
   it('Dateiendung aus Typ oder Name', () => {
