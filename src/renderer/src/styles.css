@@ -45,8 +45,10 @@ main.dragging { cursor: col-resize; user-select: none; }
 .editor .cm-anchor-geändert { background: rgba(147, 197, 253, .45); }
 .editor .cm-anchor-point { display: inline-block; width: 2px; height: 1.1em; margin: 0 1px; vertical-align: text-bottom; background: var(--accent); border-radius: 1px; }
 
-.preview { padding: 16px 28px 80px; background: var(--paper); font-family: var(--preview-font); font-size: var(--preview-size); line-height: 1.6; flex: 1; }
-.preview table { border-collapse: collapse; }
+/* Die Druckfahne bricht um – seitlich verschieben ergibt keinen Sinn; Breites scrollt in sich. */
+.pane.preview-pane { overflow-x: hidden; }
+.preview { padding: 16px 28px 80px; background: var(--paper); font-family: var(--preview-font); font-size: var(--preview-size); line-height: 1.6; flex: 1; min-width: 0; overflow-wrap: break-word; }
+.preview table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
 .preview th, .preview td { border: 1px solid var(--line); padding: 4px 10px; }
 .preview blockquote { margin-left: 0; padding-left: 16px; border-left: 3px solid var(--line); color: #4b4740; }
 .preview pre { background: #f5f3ee; padding: 10px 12px; border-radius: 6px; overflow: auto; }

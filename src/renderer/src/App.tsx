@@ -879,7 +879,7 @@ export function App() {
           <div className="editor" ref={editorHost} />
         </section>
         <div {...splitterProps('split')} />
-        <section className={`pane ${collapsed.preview ? 'collapsed' : ''}`}>
+        <section className={`pane preview-pane ${collapsed.preview ? 'collapsed' : ''}`}>
           {collapsed.preview && <CollapsedStrip title="Druckfahne" onExpand={() => togglePane('preview')} />}
           <h2>
             <span className="pane-title">Druckfahne</span>
