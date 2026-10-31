@@ -158,3 +158,15 @@ button.link { border: none; background: none; color: var(--muted); cursor: point
 .markdown code { font-size: .9em; }
 .markdown table { border-collapse: collapse; font-size: 12px; }
 .markdown th, .markdown td { border: 1px solid var(--line); padding: 2px 6px; }
+
+/* Wegklappbare Spalten */
+.pane > h2 { display: flex; align-items: center; justify-content: space-between; }
+button.pane-toggle { width: 22px; height: 20px; margin: -4px -8px -4px 0; }
+button.pane-toggle:disabled { opacity: .3; cursor: default; background: none; }
+.panel-tabs .pane-toggle { margin: 0 0 0 auto; align-self: center; }
+.pane.collapsed { overflow: hidden; }
+.pane.collapsed > :not(.pane-strip) { display: none !important; }
+.pane-strip { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 9px 0; border: none; background: var(--bg); color: var(--muted); cursor: pointer; font: inherit; }
+.pane-strip:hover { background: #f1efe9; color: var(--ink); }
+.pane-strip-title { writing-mode: vertical-rl; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+.splitter.hidden { visibility: hidden; pointer-events: none; border: none; }

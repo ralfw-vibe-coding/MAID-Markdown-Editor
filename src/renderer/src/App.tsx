@@ -26,6 +26,17 @@ import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
 import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer } from './chat/chat'
 import { MessageSquareText, MessagesSquare } from 'lucide-react'
+import {
+  COLLAPSED_WIDTH,
+  CollapseButton,
+  CollapsedStrip,
+  gridColumns,
+  isLastOpen,
+  loadCollapsed,
+  saveCollapsed,
+  toggleCollapsed,
+  type PaneId,
+} from './layout/panes'
 import { appendMessage, createThread, message, syncEditStates, updateThread, type Message, type Thread } from './thread/thread'
 import { ThreadPanel } from './thread/ThreadPanel'
 import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
@@ -88,6 +99,24 @@ export function App() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [split, setSplit] = useState(loadSplit)
   const [dragging, setDragging] = useState(false)
+  const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const togglePane = (id: PaneId) =>
+    setCollapsed((c) => {
+      const next = toggleCollapsed(c, id)
+      saveCollapsed(next)
+      return next
+    })
+  const sideWidth = collapsed.side ? COLLAPSED_WIDTH : THREADS_WIDTH
+  /** Zeigt Kommentare oder Chat und klappt das Seitenpanel dafür bei Bedarf auf. */
+  const showSide = (p: 'comments' | 'chat') => {
+    setPanel(p)
+    setCollapsed((c) => {
+      if (!c.side) return c
+      const next = { ...c, side: false }
+      saveCollapsed(next)
+      return next
+    })
+  }
   const mainRef = useRef<HTMLElement>(null)
   const model = useMemo(() => buildPreview(doc), [doc])
   // Undo/Redo im Editor im Thread nachziehen, damit Anzeige und KI-Verlauf stimmen.
@@ -201,7 +230,7 @@ export function App() {
     threadsRef.current = [...threadsRef.current, thread]
     setPending(null)
     setActiveId(anchor.id)
-    setPanel('comments')
+    showSide('comments')
     window.getSelection()?.removeAllRanges()
     if (withAi && host) void askAi(anchor.id, 'discuss')
   }
@@ -332,17 +361,19 @@ export function App() {
     threadsRef.current = [...threadsRef.current, thread]
     setPending(null)
     setActiveId(anchor.id)
-    setPanel('comments')
+    showSide('comments')
   }
   const threadFromEditorRef = useRef(threadFromEditor)
   threadFromEditorRef.current = threadFromEditor
+  const showSideRef = useRef(showSide)
+  showSideRef.current = showSide
 
   useEffect(
     () =>
       host?.onMenu((command) => {
         if (command === 'askAi') threadFromEditorRef.current()
         if (command === 'settings') setSettingsOpen(true)
-        if (command === 'chat') setPanel('chat')
+        if (command === 'chat') showSideRef.current('chat')
       }),
     [],
   )
@@ -351,7 +382,7 @@ export function App() {
     const main = mainRef.current
     if (!dragging || !main) return
     const rect = main.getBoundingClientRect()
-    const width = rect.width - THREADS_WIDTH - SPLITTER_WIDTH
+    const width = rect.width - sideWidth - SPLITTER_WIDTH
     setSplit(clampSplit((e.clientX - rect.left) / width))
   }
 
@@ -413,16 +444,19 @@ export function App() {
       <main
         ref={mainRef}
         className={dragging ? 'dragging' : undefined}
-        style={{
-          gridTemplateColumns: `minmax(0, ${split}fr) ${SPLITTER_WIDTH}px minmax(0, ${1 - split}fr) ${THREADS_WIDTH}px`,
-        }}
+        style={{ gridTemplateColumns: gridColumns(collapsed, split, SPLITTER_WIDTH, THREADS_WIDTH) }}
       >
-        <section className="pane manuscript">
-          <h2>Manuskript</h2>
+        {/* Weggeklappte Spalten bleiben im DOM, damit Editor, Entwürfe und Verlauf erhalten bleiben. */}
+        <section className={`pane manuscript ${collapsed.editor ? 'collapsed' : ''}`}>
+          {collapsed.editor && <CollapsedStrip title="Manuskript" toward="right" onExpand={() => togglePane('editor')} />}
+          <h2>
+            Manuskript
+            <CollapseButton toward="left" disabled={isLastOpen(collapsed, 'editor')} onClick={() => togglePane('editor')} />
+          </h2>
           <div className="editor" ref={editorHost} />
         </section>
         <div
-          className="splitter"
+          className={`splitter ${collapsed.editor || collapsed.preview ? 'hidden' : ''}`}
           role="separator"
           aria-orientation="vertical"
           title="Ziehen zum Ändern der Breite, Doppelklick setzt zurück"
@@ -441,11 +475,18 @@ export function App() {
             saveSplit(0.5)
           }}
         />
-        <section className="pane">
-          <h2>Druckfahne</h2>
+        <section className={`pane ${collapsed.preview ? 'collapsed' : ''}`}>
+          {collapsed.preview && <CollapsedStrip title="Druckfahne" toward="left" onExpand={() => togglePane('preview')} />}
+          <h2>
+            Druckfahne
+            <CollapseButton toward="right" disabled={isLastOpen(collapsed, 'preview')} onClick={() => togglePane('preview')} />
+          </h2>
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
         </section>
-        <aside className={`pane threads ${activeId || panel === 'chat' ? 'chat-open' : ''}`}>
+        <aside className={`pane threads ${activeId || panel === 'chat' ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>
+          {collapsed.side && (
+            <CollapsedStrip title={panel === 'chat' ? 'Chat' : 'Kommentare'} toward="left" onExpand={() => togglePane('side')} />
+          )}
           <div className="panel-tabs" role="tablist">
             <button role="tab" aria-selected={panel === 'comments'} className={panel === 'comments' ? 'active' : ''} onClick={() => setPanel('comments')}>
               <MessageSquareText size={14} /> Kommentare
@@ -454,6 +495,7 @@ export function App() {
               <MessagesSquare size={14} /> Chat
               {chatBusy && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
+            <CollapseButton toward="right" disabled={isLastOpen(collapsed, 'side')} onClick={() => togglePane('side')} />
           </div>
           {panel === 'chat' ? (
             <ChatPanel messages={chat} busy={chatBusy} aiAvailable={!!host} onSend={(t) => void askChat(t)} onReset={() => setChat([])} />
