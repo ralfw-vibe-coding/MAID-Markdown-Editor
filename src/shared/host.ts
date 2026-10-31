@@ -7,7 +7,10 @@ export type OpenedFile = {
   sidecar: string | null
 }
 
-export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings'
+/** Formatierungen im Manuskript (Menü „Format“, Tastenkürzel, Symbolleiste). */
+export type FormatCommand = 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'link'
+
+export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings' | `format:${FormatCommand}`
 
 export type DiscardChoice = 'save' | 'discard' | 'cancel'
 

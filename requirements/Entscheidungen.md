@@ -30,6 +30,8 @@ Es gibt kein festes Zauberwort. Der Nutzer sagt im Thread oder Chat in eigenen W
 
 CommonMark + GFM (Tabellen, Tasklisten, Durchstreichen, Autolinks). Fußnoten, Frontmatter, Mathe, Mermaid vorerst nicht. Keine zeichenverändernden Transformationen (z. B. Smartypants).
 
+Ergänzt (31.10.2026) um zwei verbreitete Erweiterungen, wie in Obsidian/MacDown: `==Hervorhebung==` und die Inline-Tags `<u>…</u>` (unterstrichen) und `<mark>…</mark>`. Andere Programme zeigen sie ggf. als Rohtext.
+
 ## E5 · Offsets
 
 Alle Positionen sind UTF-16-Code-Unit-Offsets in den Markdown-Quelltext (wie JS-Strings, CodeMirror und micromark). Positionslogik lebt ausschließlich in TypeScript.

@@ -22,6 +22,8 @@ import {
 import { sampleDoc } from './sampleDoc'
 import { markdownKeymap } from './editor/markdownKeymap'
 import { useDocumentFile } from './doc/useDocumentFile'
+import { formatCommands, type FormatCommand } from './editor/format'
+import { FormatToolbar } from './editor/FormatToolbar'
 import { useSettings } from './settings/useSettings'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
@@ -169,8 +171,18 @@ export function App() {
       EditorView.lineWrapping,
       anchorField,
       anchorHistory,
-      // In der App kommt ⇧⌘K über das Menü; im Browser direkt im Editor.
-      host ? [] : keymap.of([{ key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) }]),
+      // In der App kommen diese Kürzel über die Menüs „KI“ und „Format“; im Browser direkt im Editor.
+      host
+        ? []
+        : keymap.of([
+            { key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) },
+            { key: 'Mod-b', run: formatCommands.bold },
+            { key: 'Mod-i', run: formatCommands.italic },
+            { key: 'Mod-u', run: formatCommands.underline },
+            { key: 'Mod-Shift-x', run: formatCommands.strike },
+            { key: 'Mod-Shift-h', run: formatCommands.highlight },
+            { key: 'Mod-k', run: formatCommands.link },
+          ]),
       // Bilder aus der Zwischenablage oder per Ziehen landen im Bilderordner neben dem Dokument.
       EditorView.domEventHandlers({
         paste(e, view) {
@@ -462,12 +474,25 @@ export function App() {
   threadFromEditorRef.current = threadFromEditor
   const newChatRef = useRef(() => {})
 
+  /** Formatierung auf die Auswahl im Manuskript anwenden. */
+  function applyFormat(cmd: FormatCommand) {
+    const view = viewRef.current
+    if (!view) return
+    formatCommands[cmd](view)
+    view.focus()
+  }
+
   useEffect(
     () =>
       host?.onMenu((command) => {
         if (command === 'askAi') threadFromEditorRef.current()
         if (command === 'settings') setSettingsOpen(true)
         if (command === 'chat') newChatRef.current()
+        if (command.startsWith('format:')) {
+          // Nicht in Eingabefeldern (Chat, Kommentar) – dort gilt das Kürzel nicht dem Manuskript.
+          const focus = document.activeElement
+          if (!(focus instanceof HTMLTextAreaElement || focus instanceof HTMLInputElement)) applyFormat(command.slice(7) as FormatCommand)
+        }
       }),
     [],
   )
@@ -639,6 +664,7 @@ export function App() {
           {collapsed.editor && <CollapsedStrip title="Manuskript" onExpand={() => togglePane('editor')} />}
           <h2>
             Manuskript
+            <FormatToolbar onFormat={applyFormat} />
             <CollapseButton disabled={cannotCollapse(collapsed, 'editor')} onClick={() => togglePane('editor')} />
           </h2>
           <div className="editor" ref={editorHost} />

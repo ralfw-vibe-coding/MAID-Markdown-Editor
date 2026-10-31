@@ -18,5 +18,7 @@ export const corpus: Record<string, string> = {
 
   html: 'Text mit <kbd>Strg</kbd> drin.\n\n<div class="x">\nBlock-HTML\n</div>\n',
 
+  hervorhebung: 'Ein ==wichtiger Satz== mit <u>Unterstrich</u> und ==**fett markiert**==, dazu ein = und == offen.\n',
+
   referenzen: 'Ein [Referenz-Link][ref] und ![Bild](assets/bild.png).\n\n[ref]: https://example.com\n',
 }

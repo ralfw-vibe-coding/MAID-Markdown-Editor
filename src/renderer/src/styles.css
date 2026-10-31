@@ -192,3 +192,13 @@ button.chat-title.editable:hover { background: #f1efe9; }
 .preview .img-handle { position: absolute; right: -5px; bottom: -5px; width: 14px; height: 14px; border-radius: 3px; background: var(--paper); border: 2px solid var(--accent); cursor: nwse-resize; opacity: 0; transition: opacity .12s; touch-action: none; }
 .preview .img-box:hover .img-handle, .preview .img-handle:active { opacity: 1; }
 .preview .img-box:hover img { outline: 1px dashed var(--accent); outline-offset: 2px; }
+
+/* Formatierungsleiste im Kopf des Manuskripts */
+.format-toolbar { display: flex; align-items: center; gap: 1px; margin: -4px 8px -4px auto; }
+.format-toolbar button.icon { width: 24px; height: 22px; color: #6b665e; }
+.format-toolbar button.icon:hover { color: var(--ink); }
+.format-toolbar button.icon.separated { margin-left: 7px; }
+.pane.manuscript > h2 .pane-toggle { margin-left: 0; }
+
+/* Hervorhebung und Unterstrich in der Druckfahne */
+.preview mark, .markdown mark { background: #fef08a; color: inherit; padding: 0 1px; border-radius: 2px; }

@@ -55,8 +55,67 @@ export function buildPreview(md: string): Preview {
     return { kind: 'seg', id, className }
   }
 
+  /** Segmente für Teilstücke [a, b) eines bereits zugeordneten Textes. */
+  function piece(value: string, map: { starts: number[]; ends: number[] }, a: number, b: number): RNode {
+    if (a >= b) return { kind: 'text', text: '' }
+    const id = segments.length
+    segments.push({ id, text: value.slice(a, b), starts: map.starts.slice(a, b), ends: map.ends.slice(a, b) })
+    return { kind: 'seg', id }
+  }
+
+  /**
+   * Kinder eines Knotens rendern. Zusätzlich zu GFM: `==Hervorhebung==` und
+   * die Inline-Tags `<u>…</u>` und `<mark>…</mark>`. Beides wird auf Ebene der
+   * Geschwisterknoten gepaart, damit auch `==**fett**==` funktioniert;
+   * ungepaarte Zeichen bleiben als Text stehen.
+   */
   function children(node: { children: RootContent[] }, tight = false): RNode[] {
-    return node.children.map((c) => render(c, tight))
+    type Open = { tag: 'u' | 'mark'; marker: string; items: RNode[] }
+    const out: RNode[] = []
+    const stack: Open[] = []
+    const push = (n: RNode) => (stack.at(-1)?.items ?? out).push(n)
+    const close = () => {
+      const top = stack.pop()!
+      push(el(top.tag, top.items))
+    }
+
+    for (const c of node.children) {
+      if (c.type === 'html') {
+        const open = /^<(u|mark)>$/i.exec(c.value)
+        const end = /^<\/(u|mark)>$/i.exec(c.value)
+        if (open) {
+          stack.push({ tag: open[1].toLowerCase() as 'u' | 'mark', marker: c.value, items: [] })
+          continue
+        }
+        if (end && stack.at(-1)?.marker.toLowerCase() === `<${end[1].toLowerCase()}>`) {
+          close()
+          continue
+        }
+      }
+      if (c.type === 'text' && c.value.includes('==')) {
+        const from = c.position?.start.offset ?? 0
+        const map = alignText(c.value, md.slice(from, c.position?.end.offset ?? 0), from)
+        if (map) {
+          let last = 0
+          for (let i = c.value.indexOf('=='); i >= 0; i = c.value.indexOf('==', last)) {
+            push(piece(c.value, map, last, i))
+            if (stack.at(-1)?.marker === '==') close()
+            else stack.push({ tag: 'mark', marker: '==', items: [] })
+            last = i + 2
+          }
+          push(piece(c.value, map, last, c.value.length))
+          continue
+        }
+      }
+      push(render(c, tight))
+    }
+    // Nicht geschlossene Auszeichnungen: Zeichen wieder als Text, Inhalt unverändert.
+    while (stack.length) {
+      const top = stack.pop()!
+      const target = stack.at(-1)?.items ?? out
+      target.push({ kind: 'text', text: top.marker }, ...top.items)
+    }
+    return out
   }
 
   function render(node: Nodes, tight = false): RNode {

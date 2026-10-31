@@ -253,11 +253,23 @@ function buildMenu() {
     },
     { role: 'editMenu' },
     {
+      label: 'Format',
+      submenu: [
+        { label: 'Fett', accelerator: 'CmdOrCtrl+B', click: () => send('format:bold') },
+        { label: 'Kursiv', accelerator: 'CmdOrCtrl+I', click: () => send('format:italic') },
+        { label: 'Unterstrichen', accelerator: 'CmdOrCtrl+U', click: () => send('format:underline') },
+        { label: 'Durchgestrichen', accelerator: 'Shift+CmdOrCtrl+X', click: () => send('format:strike') },
+        { label: 'Hervorgehoben', accelerator: 'Shift+CmdOrCtrl+H', click: () => send('format:highlight') },
+        { type: 'separator' },
+        { label: 'Link einfügen', accelerator: 'CmdOrCtrl+K', click: () => send('format:link') },
+      ],
+    },
+    {
       label: 'KI',
       submenu: [
         // Kommentar: an eine Stelle gebunden (Markierung oder Cursor). Chat: zum ganzen Dokument.
         { label: 'Kommentar zur Druckfahne', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
-        { label: 'Chat zum Manuskript', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
+        { label: 'Chat mit Manuskript', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
       ],
     },
     { role: 'viewMenu' },

@@ -45,3 +45,24 @@ function findImage(n: Node): Extract<Node, { kind: 'image' }> | null {
   }
   return null
 }
+
+describe('Hervorhebung und Unterstrich in der Druckfahne', () => {
+  const tags = (n: Node, out: string[] = []): string[] => {
+    if (n.kind === 'el') {
+      out.push(n.tag)
+      n.children.forEach((c) => tags(c, out))
+    }
+    return out
+  }
+  it('==…== wird zu <mark>, <u>…</u> zu <u>, auch mit Fett darin', () => {
+    const t = tags(buildPreview('Ein ==wichtiger== Satz, <u>unten</u> und ==**fett**==.').root)
+    expect(t.filter((x) => x === 'mark')).toHaveLength(2)
+    expect(t).toContain('u')
+    expect(t).toContain('strong')
+  })
+  it('ungepaartes == bleibt sichtbar', () => {
+    const { segments, root } = buildPreview('a == b')
+    expect(tags(root)).not.toContain('mark')
+    expect(segments.map((s) => s.text).join('')).toBe('a  b')
+  })
+})
