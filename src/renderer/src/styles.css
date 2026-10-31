@@ -333,3 +333,13 @@ button.chat-title.editable:hover { background: #f1efe9; }
 .editable-title:hover { background: #f1efe9; }
 .editable-title-input { min-width: 0; width: 100%; font: inherit; font-weight: 600; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 4px; background: var(--paper); }
 .version-row .editable-title-input { font-size: 12px; font-weight: 500; }
+
+/* Alle Spaltenköpfe gleich hoch und so kompakt wie der der Druckfahne */
+.pane > h2, .panel-tabs { height: 30px; min-height: 30px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+.panel-tabs button { padding: 2px 8px; }
+.pane > h2 button.icon, .format-toolbar button.icon { height: 20px; }
+.status-indicators .indicator { height: 18px; }
+/* Wird es eng, kürzt sich zuerst der Titel, dann die Symbolleiste; der Chevron bleibt immer sichtbar. */
+.pane > h2 > * { flex-shrink: 0; }
+.pane > h2 > .pane-title { flex-shrink: 1; min-width: 24px; overflow: hidden; text-overflow: ellipsis; }
+.pane > h2 > .format-toolbar { flex-shrink: 1; min-width: 0; overflow: hidden; }

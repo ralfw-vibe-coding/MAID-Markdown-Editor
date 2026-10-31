@@ -833,7 +833,7 @@ export function App() {
         <section className={`pane versions-column ${collapsed.versions ? 'collapsed' : ''}`}>
           {collapsed.versions && <CollapsedStrip title="Fassungen" onExpand={() => togglePane('versions')} />}
           <h2>
-            Fassungen
+            <span className="pane-title">Fassungen</span>
             <CollapseButton disabled={cannotCollapse(collapsed, 'versions')} onClick={() => togglePane('versions')} />
           </h2>
           <VersionsPane
@@ -860,7 +860,7 @@ export function App() {
         <section className={`pane manuscript ${collapsed.editor ? 'collapsed' : ''}`}>
           {collapsed.editor && <CollapsedStrip title="Manuskript" onExpand={() => togglePane('editor')} />}
           <h2>
-            Manuskript
+            <span className="pane-title">Manuskript</span>
             {host && (
               <SaveStatus
                 hasPath={!!file.path}
@@ -882,7 +882,7 @@ export function App() {
         <section className={`pane ${collapsed.preview ? 'collapsed' : ''}`}>
           {collapsed.preview && <CollapsedStrip title="Druckfahne" onExpand={() => togglePane('preview')} />}
           <h2>
-            Druckfahne
+            <span className="pane-title">Druckfahne</span>
             <button
               className={`icon sync-toggle ${syncScroll ? 'on' : ''}`}
               title={syncScroll ? 'Mitlaufendes Scrollen ist an – klicken zum Ausschalten' : 'Mitlaufendes Scrollen ist aus – klicken zum Einschalten'}
