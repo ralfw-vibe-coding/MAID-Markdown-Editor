@@ -4,6 +4,7 @@ import { basename, join } from 'node:path'
 import { channels, SIDECAR_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
 import { askClaude, claudeInfo } from './ai'
 import { getSettings, updateSettings } from './settings'
+import { handleLocalFileScheme, registerLocalFileScheme, saveImage } from './images'
 
 /** Zustand eines Dokumentfensters – jedes Fenster hat genau ein Dokument. */
 type DocWindow = {
@@ -191,6 +192,7 @@ function registerIpc() {
   ipcMain.handle(channels.getSettings, () => getSettings())
   ipcMain.handle(channels.setSettings, (_e, changes: Partial<Settings>) => updateSettings(changes))
   ipcMain.handle(channels.claudeInfo, () => claudeInfo())
+  ipcMain.handle(channels.saveImage, (_e, documentPath: string, data: Uint8Array, extension: string) => saveImage(documentPath, data, extension))
 
   ipcMain.on(channels.documentState, (e, state: DocumentState) => {
     const dw = senderWindow(e)
@@ -254,8 +256,8 @@ function buildMenu() {
       label: 'KI',
       submenu: [
         // Kommentar: an eine Stelle gebunden (Markierung oder Cursor). Chat: zum ganzen Dokument.
-        { label: 'Kommentar zur Markierung', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
-        { label: 'Neuer Chat zum Dokument', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
+        { label: 'Kommentar zur Druckfahne', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
+        { label: 'Chat zum Manuskript', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
       ],
     },
     { role: 'viewMenu' },
@@ -263,6 +265,8 @@ function buildMenu() {
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
+
+registerLocalFileScheme()
 
 // Name für Menü „Über …“/„… beenden“; Dock und ⌘-Tab nehmen ihn aus dem Bundle (scripts/brand-electron.mjs).
 app.setName('MAID')
@@ -280,6 +284,7 @@ app.whenReady().then(() => {
   for (const arg of process.argv.slice(app.isPackaged ? 1 : 2)) {
     if (/\.(md|markdown|txt)$/i.test(arg)) startupPaths.push(arg)
   }
+  handleLocalFileScheme()
   registerIpc()
   buildMenu()
   // Je Datei ein Fenster; ohne Datei ein leeres.

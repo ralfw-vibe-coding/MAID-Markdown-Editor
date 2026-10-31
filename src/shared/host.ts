@@ -73,11 +73,26 @@ export interface MaidHost {
   setSettings(changes: Partial<Settings>): Promise<Settings>
   /** Welche Claude CLI würde benutzt, und in welcher Version? */
   claudeInfo(): Promise<ClaudeInfo>
+  /**
+   * Legt ein Bild im Bilderordner neben dem Dokument ab und liefert den Pfad
+   * relativ zum Dokument (für den Markdown-Bildverweis).
+   */
+  saveImage(documentPath: string, data: Uint8Array, extension: string): Promise<string>
   /** Meldet dem Hauptprozess, dass die Oberfläche Befehle entgegennehmen kann. */
   ready(): void
 }
 
 export const SIDECAR_SUFFIX = '.maid.json'
+
+/** Bilder eines Dokuments liegen neben ihm in „<Name ohne Endung> - Images“. */
+export function imagesFolderName(documentFileName: string): string {
+  return `${documentFileName.replace(/\.(md|markdown|txt)$/i, '')} - Images`
+}
+
+/** Protokoll, über das die Druckfahne lokale Bilder lädt: maid-file://local/<absoluter Pfad>. */
+export const LOCAL_FILE_SCHEME = 'maid-file'
+
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'heic', 'tif', 'tiff', 'bmp']
 
 export const channels = {
   openDialog: 'file:open-dialog',
@@ -94,4 +109,5 @@ export const channels = {
   getSettings: 'settings:get',
   setSettings: 'settings:set',
   claudeInfo: 'ai:claude-info',
+  saveImage: 'file:save-image',
 } as const

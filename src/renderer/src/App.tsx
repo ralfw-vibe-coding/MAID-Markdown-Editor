@@ -3,7 +3,8 @@ import { basicSetup } from 'codemirror'
 import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
-import type { MaidHost } from '../../shared/host'
+import { IMAGE_EXTENSIONS, LOCAL_FILE_SCHEME, type MaidHost } from '../../shared/host'
+import { imageExtension, imageMarkdown, setImageWidth } from './render/imageSize'
 import { buildPreview } from './render/buildPreview'
 import { Preview } from './render/Preview'
 import { domRangeToSource, sourceToDomRange, type SourceRange } from './anchor/selection'
@@ -60,6 +61,11 @@ const host = window.maid ?? null
 const initialDoc = host ? '' : sampleDoc
 
 type Pending = SourceRange & { x: number; y: number }
+
+/** Bilddateien aus Zwischenablage oder Ziehen. */
+function imageFiles(list: FileList | undefined | null): File[] {
+  return [...(list ?? [])].filter((f) => IMAGE_EXTENSIONS.includes(imageExtension(f) ?? ''))
+}
 
 const SPLITTER_WIDTH = 5
 const SPLIT_KEY = 'maid.split'
@@ -165,6 +171,25 @@ export function App() {
       anchorHistory,
       // In der App kommt ⇧⌘K über das Menü; im Browser direkt im Editor.
       host ? [] : keymap.of([{ key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) }]),
+      // Bilder aus der Zwischenablage oder per Ziehen landen im Bilderordner neben dem Dokument.
+      EditorView.domEventHandlers({
+        paste(e, view) {
+          const files = imageFiles(e.clipboardData?.files)
+          if (files.length === 0) return false
+          e.preventDefault()
+          const { from, to } = view.state.selection.main
+          void insertImagesRef.current(files, from, to)
+          return true
+        },
+        drop(e, view) {
+          const files = imageFiles(e.dataTransfer?.files)
+          if (files.length === 0) return false
+          e.preventDefault()
+          const at = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.head
+          void insertImagesRef.current(files, at, at)
+          return true
+        },
+      }),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) setDoc(u.state.doc.toString())
         if (u.docChanged) {
@@ -217,6 +242,47 @@ export function App() {
       view.focus()
     },
   })
+
+  /** Lädt relative Bildpfade über das lokale Bildprotokoll, relativ zum Ordner des Dokuments. */
+  const resolveSrc = useMemo(() => {
+    const p = file.path
+    if (!host || !p) return undefined
+    const dir = p.slice(0, p.lastIndexOf('/')).split('/').map(encodeURIComponent).join('/')
+    const base = `${LOCAL_FILE_SCHEME}://local${dir}/`
+    return (src: string) => (/^[a-z][a-z0-9+.-]*:/i.test(src) ? src : new URL(src, base).href)
+  }, [file.path])
+
+  async function insertImages(files: File[], from: number, to: number) {
+    const view = viewRef.current
+    if (!host || !view) return file.showError('Bilder einfügen geht nur in der App.')
+    try {
+      const docPath = await file.ensurePath()
+      if (!docPath) return file.showError('Zum Einfügen von Bildern das Dokument bitte zuerst sichern – die Bilder liegen neben der Datei.')
+      const refs: string[] = []
+      for (const f of files) refs.push(imageMarkdown(await host.saveImage(docPath, new Uint8Array(await f.arrayBuffer()), imageExtension(f)!)))
+      const insert = refs.join('\n\n')
+      const len = view.state.doc.length
+      view.dispatch({
+        changes: { from: Math.min(from, len), to: Math.min(to, len), insert },
+        selection: { anchor: Math.min(from, len) + insert.length },
+        scrollIntoView: true,
+        userEvent: 'input.paste',
+      })
+    } catch (err) {
+      file.showError(`Bild konnte nicht eingefügt werden: ${(err as Error).message}`)
+    }
+  }
+  const insertImagesRef = useRef(insertImages)
+  insertImagesRef.current = insertImages
+
+  /** Neue Anzeigebreite eines Bildes in den Markdown-Quelltext schreiben. */
+  function resizeImage(from: number, to: number, width: number | null) {
+    const view = viewRef.current
+    if (!view) return
+    const source = view.state.doc.sliceString(from, to)
+    const next = setImageWidth(source, width)
+    if (next !== source) view.dispatch({ changes: { from, to, insert: next }, userEvent: 'input.maid' })
+  }
 
   // Anker in der Druckfahne über die CSS Custom Highlight API markieren – ohne DOM-Umbau.
   useLayoutEffect(() => {
@@ -584,7 +650,7 @@ export function App() {
             Druckfahne
             <CollapseButton disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
           </h2>
-          <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
+          <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} resolveSrc={resolveSrc} onImageResize={resizeImage} />
         </section>
         <div {...splitterProps('side')} />
         <aside className={`pane threads ${(panel === 'comments' ? activeId : activeChatId) ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>

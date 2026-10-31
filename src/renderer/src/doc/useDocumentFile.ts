@@ -45,10 +45,11 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats
   const dirty = doc !== saved.doc || threadsChanged || chatChanged || !sameAnchors(anchors, saved.anchors)
   const name = fileName(path)
 
-  async function save(asNew = false): Promise<boolean> {
-    if (!host) return false
+  /** Sichert; liefert den Pfad oder null, wenn abgebrochen. */
+  async function save(asNew = false): Promise<string | null> {
+    if (!host) return null
     const target = asNew || !path ? await host.saveDialog(path ? name : 'Unbenannt.md') : path
-    if (!target) return false
+    if (!target) return null
     const content = doc
     const current = { anchors, threads, chats }
     const sidecar =
@@ -59,7 +60,7 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats
     setPath(target)
     setSaved({ doc: content, ...current })
     if (threads.length > 0 || used(chats).length > 0) setKeepSidecar(false)
-    return true
+    return target
   }
 
   /** Fragt bei ungesicherten Änderungen nach; true = weitermachen. */
@@ -67,7 +68,7 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats
     if (!host || !dirty) return true
     const choice = await host.confirmDiscard(name)
     if (choice === 'cancel') return false
-    if (choice === 'save') return save()
+    if (choice === 'save') return (await save()) !== null
     return true
   }
 
@@ -135,5 +136,10 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats
     host?.setDocumentState({ path, dirty, empty: doc.length === 0 })
   }, [host, path, dirty, doc.length === 0])
 
-  return { path, name, dirty, error, clearError: () => setError(null) }
+  /** Pfad des Dokuments; ein neues Dokument wird dafür erst gesichert (null = abgebrochen). */
+  async function ensurePath(): Promise<string | null> {
+    return path ?? (await save())
+  }
+
+  return { path, name, dirty, error, ensurePath, showError: setError, clearError: () => setError(null) }
 }

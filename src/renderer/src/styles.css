@@ -184,3 +184,11 @@ button.chat-title.editable { min-width: 0; padding: 2px 4px; margin-left: -4px; 
 button.chat-title.editable:hover { background: #f1efe9; }
 .chat-title-input { flex: 1; min-width: 0; margin-right: 6px; font: inherit; font-weight: 600; padding: 2px 4px; border: 1px solid var(--accent); border-radius: 4px; }
 .global-chat .chat-head { gap: 6px; }
+
+/* Bilder in der Druckfahne: Griff unten rechts ändert die Anzeigebreite */
+.preview .img-box { position: relative; display: inline-block; max-width: 100%; line-height: 0; vertical-align: bottom; }
+.preview .img-box img { width: 100%; max-width: 100%; height: auto; border-radius: 2px; }
+.preview .img-box:not([style]) img { width: auto; }
+.preview .img-handle { position: absolute; right: -5px; bottom: -5px; width: 14px; height: 14px; border-radius: 3px; background: var(--paper); border: 2px solid var(--accent); cursor: nwse-resize; opacity: 0; transition: opacity .12s; touch-action: none; }
+.preview .img-box:hover .img-handle, .preview .img-handle:active { opacity: 1; }
+.preview .img-box:hover img { outline: 1px dashed var(--accent); outline-offset: 2px; }

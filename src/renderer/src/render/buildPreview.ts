@@ -3,6 +3,7 @@ import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import type { Definition, Nodes, Root, RootContent } from 'mdast'
 import { alignText, type AlignOptions } from './align'
+import { parseAltSize } from './imageSize'
 
 /** Ein sichtbares Textstück der Preview mit zeichengenauer Quellzuordnung. */
 export type Segment = {
@@ -17,6 +18,8 @@ export type RNode =
   | { kind: 'el'; tag: string; props?: Record<string, unknown>; children: RNode[] }
   | { kind: 'seg'; id: number; className?: string }
   | { kind: 'text'; text: string }
+  /** Bild mit Quelltextbereich (für das Ändern der Anzeigegröße) und optionaler Breite aus `![alt|300](…)`. */
+  | { kind: 'image'; src: string; alt: string; title?: string; width?: number; from: number; to: number }
 
 export type Preview = {
   root: RNode
@@ -122,10 +125,10 @@ export function buildPreview(md: string): Preview {
         return el('a', children(node), { href: def?.url, title: def?.title ?? undefined })
       }
       case 'image':
-        return el('img', [], { src: node.url, alt: node.alt ?? '', title: node.title ?? undefined })
+        return { kind: 'image', src: node.url, ...parseAltSize(node.alt ?? ''), title: node.title ?? undefined, from, to }
       case 'imageReference': {
         const def = definitions.get(node.identifier)
-        return el('img', [], { src: def?.url, alt: node.alt ?? '', title: def?.title ?? undefined })
+        return { kind: 'image', src: def?.url ?? '', ...parseAltSize(node.alt ?? ''), title: def?.title ?? undefined, from, to }
       }
       case 'table': {
         const [head, ...body] = node.children

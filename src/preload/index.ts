@@ -12,6 +12,7 @@ const host: MaidHost = {
   getSettings: () => ipcRenderer.invoke(channels.getSettings),
   setSettings: (changes) => ipcRenderer.invoke(channels.setSettings, changes),
   claudeInfo: () => ipcRenderer.invoke(channels.claudeInfo),
+  saveImage: (documentPath, data, extension) => ipcRenderer.invoke(channels.saveImage, documentPath, data, extension),
   openDialog: () => ipcRenderer.invoke(channels.openDialog),
   saveDialog: (suggestedName) => ipcRenderer.invoke(channels.saveDialog, suggestedName),
   read: (path) => ipcRenderer.invoke(channels.read, path),
