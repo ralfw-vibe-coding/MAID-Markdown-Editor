@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gridColumns, isLastOpen, toggleCollapsed, type Collapsed } from './panes'
+import { cannotCollapse, gridColumns, toggleCollapsed, type Collapsed } from './panes'
 
 const open: Collapsed = { editor: false, preview: false, side: false }
 
@@ -16,11 +16,18 @@ describe('Wegklappbare Spalten', () => {
     expect(gridColumns({ editor: true, preview: true, side: false }, 0.5, 5, 360)).toBe('30px 0px 30px minmax(0, 1fr)')
   })
 
-  it('die letzte offene Spalte lässt sich nicht wegklappen', () => {
-    const c = { editor: true, preview: true, side: false }
-    expect(toggleCollapsed(c, 'side')).toBe(c)
-    expect(isLastOpen(c, 'side')).toBe(true)
-    expect(isLastOpen(open, 'side')).toBe(false)
-    expect(toggleCollapsed(c, 'editor')).toEqual({ editor: false, preview: true, side: false })
+  it('wird die letzte offene Spalte weggeklappt, geht das Manuskript auf', () => {
+    const nurSeite = { editor: true, preview: true, side: false }
+    expect(cannotCollapse(nurSeite, 'side')).toBe(false)
+    expect(toggleCollapsed(nurSeite, 'side')).toEqual({ editor: false, preview: true, side: true })
+    const nurDruckfahne = { editor: true, preview: false, side: true }
+    expect(toggleCollapsed(nurDruckfahne, 'preview')).toEqual({ editor: false, preview: true, side: true })
+  })
+
+  it('nur das Manuskript als letzte offene Spalte lässt sich nicht wegklappen', () => {
+    const nurManuskript = { editor: false, preview: true, side: true }
+    expect(cannotCollapse(nurManuskript, 'editor')).toBe(true)
+    expect(toggleCollapsed(nurManuskript, 'editor')).toEqual(nurManuskript)
+    expect(cannotCollapse(open, 'editor')).toBe(false)
   })
 })

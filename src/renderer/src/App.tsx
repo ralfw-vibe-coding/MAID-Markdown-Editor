@@ -31,7 +31,7 @@ import {
   CollapseButton,
   CollapsedStrip,
   gridColumns,
-  isLastOpen,
+  cannotCollapse,
   loadCollapsed,
   saveCollapsed,
   toggleCollapsed,
@@ -501,7 +501,7 @@ export function App() {
           {collapsed.editor && <CollapsedStrip title="Manuskript" toward="right" onExpand={() => togglePane('editor')} />}
           <h2>
             Manuskript
-            <CollapseButton toward="left" disabled={isLastOpen(collapsed, 'editor')} onClick={() => togglePane('editor')} />
+            <CollapseButton toward="left" disabled={cannotCollapse(collapsed, 'editor')} onClick={() => togglePane('editor')} />
           </h2>
           <div className="editor" ref={editorHost} />
         </section>
@@ -529,7 +529,7 @@ export function App() {
           {collapsed.preview && <CollapsedStrip title="Druckfahne" toward="left" onExpand={() => togglePane('preview')} />}
           <h2>
             Druckfahne
-            <CollapseButton toward="right" disabled={isLastOpen(collapsed, 'preview')} onClick={() => togglePane('preview')} />
+            <CollapseButton toward="right" disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
           </h2>
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
         </section>
@@ -545,7 +545,7 @@ export function App() {
               <MessagesSquare size={14} /> Chat
               {chatBusy && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
-            <CollapseButton toward="right" disabled={isLastOpen(collapsed, 'side')} onClick={() => togglePane('side')} />
+            <CollapseButton toward="right" disabled={cannotCollapse(collapsed, 'side')} onClick={() => togglePane('side')} />
           </div>
           {panel === 'chat' ? (
             <ChatPanel

@@ -28,13 +28,18 @@ export function saveCollapsed(c: Collapsed) {
   }
 }
 
-/** Klappt eine Spalte um – außer es wäre danach keine mehr offen. */
+/** Klappt eine Spalte um. Wäre danach keine mehr offen, geht das Manuskript auf. */
 export function toggleCollapsed(c: Collapsed, id: PaneId): Collapsed {
   const next = { ...c, [id]: !c[id] }
-  return Object.values(next).every(Boolean) ? c : next
+  return Object.values(next).every(Boolean) ? { ...next, editor: false } : next
 }
 
-export const isLastOpen = (c: Collapsed, id: PaneId) => !c[id] && Object.values(c).filter((v) => !v).length === 1
+/**
+ * Lässt sich die Spalte nicht wegklappen? Nur das Manuskript, wenn es als
+ * einzige offen ist – jede andere letzte Spalte macht beim Wegklappen dem
+ * Manuskript Platz.
+ */
+export const cannotCollapse = (c: Collapsed, id: PaneId) => id === 'editor' && !c.editor && c.preview && c.side
 
 /**
  * Spaltenraster für Manuskript | Trenner | Druckfahne | Seitenpanel.
@@ -56,7 +61,7 @@ export function CollapseButton({ toward, disabled, onClick }: { toward: 'left' |
   return (
     <button
       className="icon pane-toggle"
-      title={disabled ? 'Mindestens eine Spalte bleibt offen' : 'Spalte wegklappen'}
+      title={disabled ? 'Das Manuskript bleibt offen, wenn alles andere zu ist' : 'Spalte wegklappen'}
       aria-label="Spalte wegklappen"
       disabled={disabled}
       onClick={onClick}
