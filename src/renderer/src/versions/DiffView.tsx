@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
 import { RotateCcw, X } from 'lucide-react'
 import { diffWords } from '../thread/diffWords'
+import { EditableTitle } from '../layout/EditableTitle'
 import { diffParagraphs, type ParagraphDiff } from './versions'
 
 type Props = {
   title: string
+  /** Macht den Titel umbenennbar (Klick auf den Titel). */
+  onRename?: (title: string) => void
+  /** Ursprünglicher Wert für das Umbenennen (ohne Ersatztext wie „(ohne Bezeichnung)“). */
+  rawTitle?: string
   meta?: string
   /** Erklärt, was verglichen wird. */
   legend: string
@@ -19,7 +24,7 @@ type Props = {
 }
 
 /** Absatzweiser Vergleich, Änderungen wortgenau, unveränderte Absätze eingeklappt. */
-export function DiffView({ title, meta, legend, before, after, emptyText, restoreLabel, restoreTitle, onRestore, onClose }: Props) {
+export function DiffView({ title, rawTitle, onRename, meta, legend, before, after, emptyText, restoreLabel, restoreTitle, onRestore, onClose }: Props) {
   const diff = useMemo(() => diffParagraphs(before, after), [before, after])
   const changes = diff.filter((d) => d.type !== 'same').length
 
@@ -28,7 +33,7 @@ export function DiffView({ title, meta, legend, before, after, emptyText, restor
       <div className="diff-bar">
         <div className="diff-row">
           <div className="diff-title">
-            <strong>{title}</strong>
+            <strong>{onRename ? <EditableTitle value={rawTitle ?? title} placeholder={title} onRename={onRename} /> : title}</strong>
             {meta && <span className="muted"> · {meta}</span>}
           </div>
           {onClose && (

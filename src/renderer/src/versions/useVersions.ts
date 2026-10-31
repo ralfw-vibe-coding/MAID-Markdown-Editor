@@ -42,9 +42,13 @@ export function useVersions(host: MaidHost | null, path: string | null) {
     return version
   }
 
+  async function rename(docPath: string, id: string, message: string) {
+    await persist(docPath, latest.current.map((v) => (v.id === id ? { ...v, message } : v)))
+  }
+
   async function remove(docPath: string, id: string) {
     await persist(docPath, latest.current.filter((v) => v.id !== id))
   }
 
-  return { versions, add, remove, error, clearError: () => setError(null) }
+  return { versions, add, rename, remove, error, clearError: () => setError(null) }
 }

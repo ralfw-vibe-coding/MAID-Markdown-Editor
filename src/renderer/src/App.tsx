@@ -844,8 +844,12 @@ export function App() {
             focusToken={versionFocus}
             onSave={saveVersion}
             aiAvailable={!!host}
+            onSuggest={host ? () => suggestVersionMessage(viewRef.current?.state.doc.toString() ?? doc) : undefined}
             onSelect={setSelectedVersionId}
             onRestore={(id) => void restoreVersion(id)}
+            onRename={(id, m) => {
+              if (file.path) void versions.rename(file.path, id, m)
+            }}
             onRemove={(id) => {
               if (file.path) void versions.remove(file.path, id)
               if (selectedVersionId === id) setSelectedVersionId(null)

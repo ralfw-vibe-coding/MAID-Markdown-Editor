@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { ConfirmDeleteButton } from '../layout/ConfirmDeleteButton'
+import { EditableTitle } from '../layout/EditableTitle'
 import { DiffView } from './DiffView'
 import { Timeline } from './Timeline'
 import { formatWhen } from './timeWindow'
@@ -15,9 +17,12 @@ type Props = {
   focusToken: number
   /** Leere Bezeichnung: Claude formuliert sie aus dem inhaltlichen Kern der Änderungen. */
   onSave: (message: string) => Promise<void>
+  /** Vorschlag von Claude ins Feld holen – zum Übernehmen oder Ändern. */
+  onSuggest?: () => Promise<string>
   aiAvailable: boolean
   onSelect: (id: string | null) => void
   onRestore: (id: string) => void
+  onRename: (id: string, message: string) => void
   onRemove: (id: string) => void
 }
 
@@ -49,6 +54,8 @@ export function VersionsPane(props: Props) {
           {selected ? (
             <DiffView
               title={fassungTitle(selected)}
+              rawTitle={selected.message}
+              onRename={(m) => props.onRename(selected.id, m)}
               meta={formatWhen(selected.createdAt)}
               legend={previous ? 'Was diese Fassung gegenüber der vorherigen geändert hat' : 'Erste Fassung'}
               before={previous?.text ?? ''}
@@ -80,9 +87,9 @@ export function VersionsPane(props: Props) {
   )
 }
 
-function SaveForm({ focusToken, onSave, aiAvailable }: Props) {
+function SaveForm({ focusToken, onSave, onSuggest, aiAvailable }: Props) {
   const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<'suggest' | 'save' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
@@ -90,19 +97,30 @@ function SaveForm({ focusToken, onSave, aiAvailable }: Props) {
     if (focusToken) input.current?.focus()
   }, [focusToken])
 
-  const save = async () => {
+  const run = async (kind: 'suggest' | 'save', f: () => Promise<void>) => {
     if (busy) return
-    setBusy(true)
+    setBusy(kind)
     setError(null)
     try {
-      await onSave(message.trim())
-      setMessage('')
+      await f()
     } catch (err) {
       setError((err as Error).message)
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
+  // Leere Bezeichnung: Claude benennt die Fassung beim Festhalten selbst.
+  const save = () =>
+    run('save', async () => {
+      await onSave(message.trim())
+      setMessage('')
+    })
+  const suggest = () =>
+    onSuggest &&
+    run('suggest', async () => {
+      setMessage(await onSuggest())
+      input.current?.focus()
+    })
 
   return (
     <div className="version-save">
@@ -112,12 +130,23 @@ function SaveForm({ focusToken, onSave, aiAvailable }: Props) {
           type="text"
           placeholder={aiAvailable ? 'Bezeichnung – leer: Claude formuliert sie' : 'Bezeichnung der Fassung'}
           value={message}
-          disabled={busy}
+          disabled={busy !== null}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void save()}
         />
-        <button className="primary" disabled={busy || (!message.trim() && !aiAvailable)} onClick={() => void save()} title="Jetzigen Stand als Fassung festhalten (⌥⌘S)">
-          {busy && !message.trim() ? 'Claude benennt …' : 'Festhalten'}
+        {onSuggest && (
+          <button
+            className="icon"
+            title="Bezeichnung von Claude vorschlagen lassen – zum Übernehmen oder Ändern"
+            aria-label="Vorschlag von Claude"
+            disabled={busy !== null}
+            onClick={() => void suggest()}
+          >
+            <Sparkles size={15} className={busy === 'suggest' ? 'spinning' : undefined} />
+          </button>
+        )}
+        <button className="primary" disabled={busy !== null || (!message.trim() && !aiAvailable)} onClick={() => void save()} title="Jetzigen Stand als Fassung festhalten (⌥⌘S)">
+          {busy === 'save' && !message.trim() ? 'Claude benennt …' : 'Festhalten'}
         </button>
       </div>
       {error && <p className="error-text">{error}</p>}
@@ -125,7 +154,7 @@ function SaveForm({ focusToken, onSave, aiAvailable }: Props) {
   )
 }
 
-function VersionList({ versions, selectedId, current, unsaved, latestText, onSelect, onRemove }: Props & { unsaved: boolean; latestText: string }) {
+function VersionList({ versions, selectedId, current, unsaved, latestText, onSelect, onRename, onRemove }: Props & { unsaved: boolean; latestText: string }) {
   const list = useRef<HTMLDivElement>(null)
   // Statistik des Aktuellen Stands gegenüber der neuesten Version (absatzweise, also auch bei langen Texten schnell).
   const stats = useMemo(() => (unsaved ? wordStats(latestText, current) : null), [unsaved, latestText, current])
@@ -152,7 +181,7 @@ function VersionList({ versions, selectedId, current, unsaved, latestText, onSel
       {[...versions].reverse().map((v) => (
         <div key={v.id} className={`version-row ${v.id === selectedId ? 'selected' : ''} ${v.auto ? 'auto' : ''}`} onClick={() => onSelect(v.id === selectedId ? null : v.id)}>
           <span className="version-dot" />
-          <span className="version-message">{fassungTitle(v)}</span>
+          <EditableTitle className="version-message" value={v.message} placeholder={fassungTitle(v)} trigger="dblclick" onRename={(m) => onRename(v.id, m)} />
           <span className="version-meta">
             {formatWhen(v.createdAt)} · <span className="plus">+{v.added}</span> <span className="minus">−{v.removed}</span>
           </span>
