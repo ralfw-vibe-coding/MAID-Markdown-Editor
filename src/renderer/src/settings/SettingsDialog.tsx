@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
+import { FontPicker } from './FontPicker'
 import type { ClaudeInfo, MaidHost, Settings } from '../../../shared/host'
 
 const MODELS = [
@@ -18,8 +19,18 @@ const EFFORTS = [
   { value: 'max', label: 'Maximal' },
 ]
 
-const EDITOR_FONTS = ['SF Mono', 'Menlo', 'Monaco', 'JetBrains Mono', 'Fira Code', 'iA Writer Mono S', 'Courier New']
-const PREVIEW_FONTS = ['Georgia', 'Iowan Old Style', 'Palatino', 'Charter', 'Baskerville', 'New York', 'Helvetica Neue', 'Avenir Next']
+// Vorschläge; angezeigt werden nur die tatsächlich installierten.
+const EDITOR_FONTS = [
+  'SF Mono', 'Menlo', 'Monaco', 'Courier New', 'Andale Mono', 'PT Mono',
+  'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Source Code Pro', 'iA Writer Mono S', 'iA Writer Duo S', 'Cascadia Code',
+]
+const PREVIEW_FONTS = [
+  'Georgia', 'Iowan Old Style', 'Palatino', 'Charter', 'Baskerville', 'Hoefler Text', 'Big Caslon', 'Didot', 'Times New Roman',
+  'New York', 'Literata', 'Source Serif 4', 'Merriweather',
+  'Helvetica Neue', 'Avenir Next', 'Gill Sans', 'Optima', 'Futura', 'Seravek', 'Inter',
+]
+const EDITOR_FALLBACK = 'ui-monospace, Menlo, monospace'
+const PREVIEW_FALLBACK = 'Georgia, serif'
 
 type Props = {
   host: MaidHost | null
@@ -98,16 +109,16 @@ export function SettingsDialog({ host, settings, onChange, onClose }: Props) {
           <h4>Schrift</h4>
           <FontRow
             label="Manuskript"
-            list="editor-fonts"
             fonts={EDITOR_FONTS}
+            fallback={EDITOR_FALLBACK}
             family={settings.editorFont}
             size={settings.editorFontSize}
             onChange={(family, size) => onChange({ editorFont: family, editorFontSize: size })}
           />
           <FontRow
             label="Druckfahne"
-            list="preview-fonts"
             fonts={PREVIEW_FONTS}
+            fallback={PREVIEW_FALLBACK}
             family={settings.previewFont}
             size={settings.previewFontSize}
             onChange={(family, size) => onChange({ previewFont: family, previewFontSize: size })}
@@ -121,23 +132,19 @@ export function SettingsDialog({ host, settings, onChange, onClose }: Props) {
 
 function FontRow(props: {
   label: string
-  list: string
   fonts: string[]
+  fallback: string
   family: string
   size: number
   onChange: (family: string, size: number) => void
 }) {
-  const { label, list, fonts, family, size, onChange } = props
+  const { label, fonts, fallback, family, size, onChange } = props
+  // Kein <label>: ein Klick in die Schriftliste würde sonst das Eingabefeld fokussieren und die Liste wieder öffnen.
   return (
-    <label>
+    <div className="field">
       <span>{label}</span>
       <span className="font-row">
-        <input type="text" list={list} placeholder="Standard" value={family} onChange={(e) => onChange(e.target.value, size)} />
-        <datalist id={list}>
-          {fonts.map((f) => (
-            <option key={f} value={f} />
-          ))}
-        </datalist>
+        <FontPicker value={family} fonts={fonts} fallback={fallback} onChange={(f) => onChange(f, size)} />
         <input
           type="number"
           min={9}
@@ -150,6 +157,6 @@ function FontRow(props: {
         />
         <span className="unit">px</span>
       </span>
-    </label>
+    </div>
   )
 }

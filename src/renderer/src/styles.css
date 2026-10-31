@@ -125,10 +125,10 @@ button.link { border: none; background: none; color: var(--muted); cursor: point
 .modal-head h3 { margin: 0; font-size: 15px; }
 .modal section { margin-top: 14px; }
 .modal h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-.modal label { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; margin: 6px 0; }
+.modal label, .modal .field { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; margin: 6px 0; }
 .modal input, .modal select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); min-width: 0; }
 .modal .font-row { display: flex; gap: 6px; align-items: center; }
-.modal .font-row input[type="text"] { flex: 1; }
+.modal .font-row .font-picker { flex: 1; }
 .modal .font-row input[type="number"] { width: 60px; }
 .modal .unit { color: var(--muted); }
 .modal .hint { margin: 4px 0 0 120px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
@@ -202,3 +202,12 @@ button.chat-title.editable:hover { background: #f1efe9; }
 
 /* Hervorhebung und Unterstrich in der Druckfahne */
 .preview mark, .markdown mark { background: #fef08a; color: inherit; padding: 0 1px; border-radius: 2px; }
+
+/* Schriftauswahl mit Vorschau */
+.font-picker { position: relative; display: flex; align-items: center; min-width: 0; }
+.font-picker input { flex: 1; min-width: 0; padding-right: 26px !important; font-size: 14px; }
+.font-picker > button.icon { position: absolute; right: 2px; width: 22px; height: 22px; }
+.font-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .15); }
+.font-list li { padding: 5px 8px; border-radius: 5px; font-size: 16px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.font-list li:hover { background: #f1efe9; }
+.font-list li.selected { background: #ffedd5; }
