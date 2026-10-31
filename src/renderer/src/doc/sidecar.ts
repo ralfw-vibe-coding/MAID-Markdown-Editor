@@ -1,6 +1,7 @@
 import type { Anchor } from '../anchor/anchors'
 import { reanchor, type StoredAnchor } from '../anchor/reanchor'
 import type { Message, Thread } from '../thread/thread'
+import type { Chat } from '../chat/chats'
 
 /**
  * Begleitdatei `<dokument>.md.maid.json`: Kommentar-Threads und ihre Anker.
@@ -15,7 +16,9 @@ export type Sidecar = {
   contentHash: string
   savedAt: string
   threads: StoredThread[]
-  /** Freier Chat zum Dokument (fehlt in älteren Begleitdateien). */
+  /** Freie Chats zum Dokument (fehlen in älteren Begleitdateien). */
+  chats?: Chat[]
+  /** Frühe Fassung mit nur einem Chat; wird beim Lesen zu `chats`. */
   chat?: Message[]
 }
 
@@ -36,12 +39,12 @@ export async function contentHash(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Liefert null, wenn es weder Threads noch Chat gibt – dann wird keine Begleitdatei geschrieben. */
+/** Liefert null, wenn es weder Threads noch Chats gibt – dann wird keine Begleitdatei geschrieben. */
 export function serializeSidecar(
   doc: string,
   anchors: Anchor[],
   threads: Thread[],
-  chat: Message[],
+  allChats: Chat[],
   documentName: string,
   hash: string,
 ): string | null {
@@ -65,7 +68,9 @@ export function serializeSidecar(
       messages: t.messages,
     })
   }
-  if (stored.length === 0 && chat.length === 0) return null
+  // Leere Chats (nie benutzt) werden nicht gesichert.
+  const chats = allChats.filter((c) => c.messages.length > 0)
+  if (stored.length === 0 && chats.length === 0) return null
   const sidecar: Sidecar = {
     format: 'maid-sidecar',
     version: 1,
@@ -73,7 +78,7 @@ export function serializeSidecar(
     contentHash: hash,
     savedAt: new Date().toISOString(),
     threads: stored,
-    ...(chat.length > 0 ? { chat } : {}),
+    ...(chats.length > 0 ? { chats } : {}),
   }
   return JSON.stringify(sidecar, null, 2) + '\n'
 }
@@ -88,11 +93,15 @@ export function parseSidecar(json: string): Sidecar {
       'kind' in m ? m : { id: crypto.randomUUID(), kind: m.author, text: m.text, at: m.at },
     )
   }
+  if (data.chat && !data.chats) {
+    data.chats = [{ id: crypto.randomUUID(), title: 'Chat', createdAt: data.chat[0]?.at ?? data.savedAt, messages: data.chat }]
+  }
+  delete data.chat
   return data
 }
 
 /** Stellt Anker und Threads eines geöffneten Dokuments aus der Begleitdatei wieder her. */
-export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { anchors: Anchor[]; threads: Thread[]; chat: Message[] } {
+export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { anchors: Anchor[]; threads: Thread[]; chats: Chat[] } {
   const unchanged = sidecar.contentHash === hash
   const anchors = sidecar.threads.map((t): Anchor => {
     const placed = reanchor(doc, t.anchor, unchanged)
@@ -106,5 +115,5 @@ export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { a
     }
   })
   const threads = sidecar.threads.map((t): Thread => ({ id: t.id, createdAt: t.createdAt, messages: t.messages }))
-  return { anchors, threads, chat: sidecar.chat ?? [] }
+  return { anchors, threads, chats: sidecar.chats ?? [] }
 }

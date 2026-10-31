@@ -28,13 +28,14 @@ export const CHAT_SCHEMA = {
     edit: { type: 'boolean', description: 'true, wenn jetzt eine Änderung ausgeführt werden soll' },
     oldText: { type: 'string', description: 'Exakter zu ersetzender Markdown-Ausschnitt oder leer' },
     newText: { type: 'string', description: 'Ersatztext in Markdown oder leer' },
+    title: { type: 'string', description: 'Kurzer Titel für dieses Gespräch (2–5 Wörter, ohne Anführungszeichen)' },
   },
-  required: ['reply', 'edit', 'oldText', 'newText'],
+  required: ['reply', 'edit', 'oldText', 'newText', 'title'],
 }
 
 export type EditorFocus = { from: number; to: number }
 
-export type ChatAnswer = { reply: string; edit: { oldText: string; newText: string } | null }
+export type ChatAnswer = { reply: string; edit: { oldText: string; newText: string } | null; title?: string }
 
 function focusDescription(doc: string, focus: EditorFocus | null): string {
   if (!focus) return 'Keine Angabe zur Cursorposition.'
@@ -82,8 +83,8 @@ export function buildChatPrompt(input: { doc: string; focus: EditorFocus | null;
 }
 
 export function parseChatAnswer(data: unknown): ChatAnswer {
-  const d = data as { reply?: unknown; edit?: unknown; oldText?: unknown; newText?: unknown }
+  const d = data as { reply?: unknown; edit?: unknown; oldText?: unknown; newText?: unknown; title?: unknown }
   if (typeof d?.reply !== 'string') throw new Error('Unerwartete Antwort der KI')
   const edit = d.edit === true && typeof d.newText === 'string' ? { oldText: String(d.oldText ?? ''), newText: d.newText } : null
-  return { reply: d.reply, edit }
+  return { reply: d.reply, edit, title: typeof d.title === 'string' ? d.title : undefined }
 }

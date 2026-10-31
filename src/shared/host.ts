@@ -11,6 +11,9 @@ export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 
 
 export type DiscardChoice = 'save' | 'discard' | 'cancel'
 
+/** Was das Fenster über sein Dokument wissen muss (Titel, Rückfrage, Wiederverwendung). */
+export type DocumentState = { path: string | null; dirty: boolean; empty: boolean }
+
 export type AiRequest = {
   prompt: string
   systemPrompt: string
@@ -60,7 +63,7 @@ export interface MaidHost {
    */
   write(path: string, content: string, sidecar: string | null | undefined): Promise<void>
   confirmDiscard(documentName: string): Promise<DiscardChoice>
-  setDocumentState(state: { path: string | null; dirty: boolean }): void
+  setDocumentState(state: DocumentState): void
   closeConfirmed(): void
   onMenu(handler: (command: MenuCommand) => void): () => void
   /** Datei, die per Finder, Dock oder „Zuletzt benutzt“ geöffnet werden soll. */

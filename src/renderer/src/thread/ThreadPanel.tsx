@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Trash2, X } from 'lucide-react'
+import { X } from 'lucide-react'
+import { ConfirmDeleteButton } from '../layout/ConfirmDeleteButton'
 import type { Anchor } from '../anchor/anchors'
 import { diffWords } from './diffWords'
 import { occursOnce, type Message, type Thread } from './thread'
@@ -90,9 +91,6 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
     onSend(thread.id, draft.trim())
     setDraft('')
   }
-  const remove = () => {
-    if (thread.messages.length <= 1 || window.confirm('Diesen Thread mit dem ganzen Verlauf löschen?')) onRemove(thread.id)
-  }
   // Die zuletzt ausgeführte Änderung kann im Thread zurückgenommen werden.
   const lastEdit = [...thread.messages].reverse().find((m) => m.kind === 'edit')
 
@@ -106,9 +104,7 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
       <div className="chat-head">
         <span className={`status status-${anchor.point ? 'point' : anchor.status}`}>{statusLabel(anchor)}</span>
         <span className="chat-tools">
-          <button className="icon danger" title="Thread löschen" aria-label="Thread löschen" onClick={remove}>
-            <Trash2 size={15} />
-          </button>
+          <ConfirmDeleteButton label="Thread löschen" onDelete={() => onRemove(thread.id)} />
           <button className="icon" title="Schließen (Esc)" aria-label="Thread schließen" onClick={onClose}>
             <X size={16} />
           </button>

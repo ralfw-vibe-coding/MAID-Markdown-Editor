@@ -31,7 +31,7 @@ describe('Prompt für den freien Chat', () => {
 
   it('lehnt Antworten ohne Text ab', () => {
     expect(() => parseChatAnswer({})).toThrow()
-    expect(parseChatAnswer({ reply: '**ok**', edit: false, oldText: '', newText: '' })).toEqual({ reply: '**ok**', edit: null })
+    expect(parseChatAnswer({ reply: '**ok**', edit: false, oldText: '', newText: '' })).toEqual({ reply: '**ok**', edit: null, title: undefined })
     expect(parseChatAnswer({ reply: 'gekürzt', edit: true, oldText: 'Erster Absatz.', newText: 'Erstes.' }).edit).toEqual({
       oldText: 'Erster Absatz.',
       newText: 'Erstes.',

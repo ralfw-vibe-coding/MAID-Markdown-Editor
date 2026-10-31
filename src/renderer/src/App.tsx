@@ -24,6 +24,7 @@ import { useDocumentFile } from './doc/useDocumentFile'
 import { useSettings } from './settings/useSettings'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
+import { createChat, renameChat, suggestTitle, updateChat, type Chat } from './chat/chats'
 import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer, type EditorFocus } from './chat/chat'
 import { MessageSquareText, MessagesSquare } from 'lucide-react'
 import {
@@ -88,7 +89,7 @@ export function App() {
   const previewRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   /** Markierung bzw. Cursor zum Zeitpunkt einer Chat-Nachricht; wird bei Änderungen mitgeführt. */
-  const chatFocusRef = useRef<EditorFocus | null>(null)
+  const chatFocusRef = useRef(new Map<string, EditorFocus>())
   const [doc, setDoc] = useState(initialDoc)
   const [anchors, setAnchors] = useState<Anchor[]>([])
   const [threads, setThreads] = useState<Thread[]>([])
@@ -96,8 +97,11 @@ export function App() {
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
   /** Seitenpanel: Kommentar-Threads oder freier Chat zum ganzen Dokument. */
   const [panel, setPanel] = useState<'comments' | 'chat'>('comments')
-  const [chat, setChat] = useState<Message[]>([])
-  const [chatBusy, setChatBusy] = useState(false)
+  const [chats, setChats] = useState<Chat[]>([])
+  /** Geöffneter Chat; null zeigt die Liste der Chats. */
+  const [activeChatId, setActiveChatId] = useState<string | null>(null)
+  /** Chats, in denen Claude gerade antwortet. */
+  const [chatBusy, setChatBusy] = useState<ReadonlySet<string>>(new Set())
   const { settings, update: updateSettings } = useSettings(host)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [pending, setPending] = useState<Pending | null>(null)
@@ -135,7 +139,16 @@ export function App() {
         return a && isPlaced(a) ? doc.slice(a.from, a.to) : null
       }, doc),
     )
-    setChat((c) => syncLastEdit(c, null, doc))
+    setChats((cs) => {
+      let changed = false
+      const next = cs.map((c) => {
+        const messages = syncLastEdit(c.messages, null, doc)
+        if (messages === c.messages) return c
+        changed = true
+        return { ...c, messages }
+      })
+      return changed ? next : cs
+    })
   }, [anchors, doc])
 
   // Laufende KI-Anfragen brauchen den aktuellen Stand, nicht den ihres Starts.
@@ -154,10 +167,11 @@ export function App() {
       host ? [] : keymap.of([{ key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) }]),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) setDoc(u.state.doc.toString())
-        const f = chatFocusRef.current
-        if (u.docChanged && f) {
-          const from = u.changes.mapPos(f.from, f.from === f.to ? -1 : 1)
-          chatFocusRef.current = { from, to: f.from === f.to ? from : Math.max(from, u.changes.mapPos(f.to, -1)) }
+        if (u.docChanged) {
+          for (const [id, f] of chatFocusRef.current) {
+            const from = u.changes.mapPos(f.from, f.from === f.to ? -1 : 1)
+            chatFocusRef.current.set(id, { from, to: f.from === f.to ? from : Math.max(from, u.changes.mapPos(f.to, -1)) })
+          }
         }
         const next = u.state.field(anchorField)
         if (next !== u.startState.field(anchorField)) setAnchors(next)
@@ -186,16 +200,17 @@ export function App() {
     doc,
     anchors,
     threads,
-    chat,
-    load(content, loaded, loadedThreads, loadedChat) {
+    chats,
+    load(content, loaded, loadedThreads, loadedChats) {
       const view = viewRef.current!
       view.setState(EditorState.create({ doc: content, extensions }))
       setDoc(content)
       setAnchors([])
       view.dispatch({ effects: setAnchorsEffect.of(loaded) })
       setThreads(loadedThreads)
-      setChat(loadedChat)
-      setChatBusy(false)
+      setChats(loadedChats)
+      setActiveChatId(null)
+      setChatBusy(new Set())
       setBusy(new Set())
       setPending(null)
       setActiveId(null)
@@ -430,37 +445,57 @@ export function App() {
     },
   })
 
-  async function askChat(text: string) {
+  const appendToChat = (id: string, m: Message) => setChats((cs) => updateChat(cs, id, (c) => ({ ...c, messages: [...c.messages, m] })))
+
+  async function askChat(id: string, text: string) {
     const view = viewRef.current
-    if (!host || !view) return
-    const question = message({ kind: 'user', text })
-    const messages = [...chat, question]
-    setChat(messages)
-    setChatBusy(true)
+    const chat = chats.find((c) => c.id === id)
+    if (!host || !view || !chat) return
+    const messages = [...chat.messages, message({ kind: 'user', text })]
+    setChats((cs) => updateChat(cs, id, (c) => ({ ...c, messages })))
+    setChatBusy((b) => new Set(b).add(id))
     try {
       const { from, to } = view.state.selection.main
-      chatFocusRef.current = { from, to }
+      chatFocusRef.current.set(id, { from, to })
       const prompt = buildChatPrompt({ doc: view.state.doc.toString(), focus: { from, to }, messages })
       const result = await host.askAi({ prompt, systemPrompt: CHAT_SYSTEM_PROMPT, schema: CHAT_SCHEMA })
-      if (!result.ok) return setChat((c) => [...c, message({ kind: 'error', text: result.error })])
+      if (!result.ok) return appendToChat(id, message({ kind: 'error', text: result.error }))
       const answer = parseChatAnswer(result.data)
-      setChat((c) => [...c, message({ kind: 'ai', text: answer.reply })])
+      setChats((cs) => updateChat(cs, id, (c) => suggestTitle({ ...c, messages: [...c.messages, message({ kind: 'ai', text: answer.reply })] }, answer.title)))
       if (answer.edit) {
         const { oldText, newText } = answer.edit
-        const done = applyChatEdit(oldText, newText, chatFocusRef.current)
+        const done = applyChatEdit(oldText, newText, chatFocusRef.current.get(id) ?? null)
         // Chat-Änderungen sind an keinen Anker gebunden; ihr Status wird im ganzen Dokument geprüft.
-        const note =
+        appendToChat(
+          id,
           'error' in done
             ? message({ kind: 'error', text: `Nicht ausgeführt: ${done.error}` })
-            : message({ kind: 'edit', before: done.before, after: newText, elsewhere: true })
-        setChat((c) => [...c, note])
+            : message({ kind: 'edit', before: done.before, after: newText, elsewhere: true }),
+        )
       }
     } catch (err) {
-      setChat((c) => [...c, message({ kind: 'error', text: (err as Error).message })])
+      appendToChat(id, message({ kind: 'error', text: (err as Error).message }))
     } finally {
-      chatFocusRef.current = null
-      setChatBusy(false)
+      chatFocusRef.current.delete(id)
+      setChatBusy((b) => {
+        const next = new Set(b)
+        next.delete(id)
+        return next
+      })
     }
+  }
+
+  /** Ein geöffneter Chat ohne Nachricht wird beim Verlassen verworfen. */
+  function leaveChat() {
+    setChats((cs) => cs.filter((c) => c.id !== activeChatId || c.messages.length > 0))
+    setActiveChatId(null)
+  }
+
+  function newChat() {
+    leaveChat()
+    const chat = createChat()
+    setChats((cs) => [...cs, chat])
+    setActiveChatId(chat.id)
   }
 
   /**
@@ -484,12 +519,12 @@ export function App() {
     return { before: text.slice(plan.from, plan.to) }
   }
 
-  function revertChatEdit(messageId: string) {
-    const m = chat.find((x) => x.id === messageId)
+  function revertChatEdit(id: string, messageId: string) {
+    const m = chats.find((c) => c.id === id)?.messages.find((x) => x.id === messageId)
     if (!m || m.kind !== 'edit') return
     const done = applyChatEdit(m.after, m.before, null)
-    if ('error' in done) return setChat((c) => [...c, message({ kind: 'error', text: `Nicht zurückgenommen: ${done.error}` })])
-    setChat((c) => c.map((x) => (x.id === messageId ? { ...x, reverted: true } : x)))
+    if ('error' in done) return appendToChat(id, message({ kind: 'error', text: `Nicht zurückgenommen: ${done.error}` }))
+    setChats((cs) => updateChat(cs, id, (c) => ({ ...c, messages: c.messages.map((x) => (x.id === messageId ? { ...x, reverted: true } : x)) })))
   }
 
   function focusThread(id: string) {
@@ -551,7 +586,7 @@ export function App() {
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
         </section>
         <div {...splitterProps('side')} />
-        <aside className={`pane threads ${activeId || panel === 'chat' ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>
+        <aside className={`pane threads ${(panel === 'comments' ? activeId : activeChatId) ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>
           {collapsed.side && (
             <CollapsedStrip title={panel === 'chat' ? 'Chat' : 'Kommentare'} onExpand={() => togglePane('side')} />
           )}
@@ -561,19 +596,30 @@ export function App() {
             </button>
             <button role="tab" aria-selected={panel === 'chat'} className={panel === 'chat' ? 'active' : ''} onClick={() => setPanel('chat')}>
               <MessagesSquare size={14} /> Chat
-              {chatBusy && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
+              {chatBusy.size > 0 && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
             <CollapseButton disabled={cannotCollapse(collapsed, 'side')} onClick={() => togglePane('side')} />
           </div>
           {panel === 'chat' ? (
             <ChatPanel
               doc={doc}
-              messages={chat}
+              chats={chats}
+              activeId={activeChatId}
               busy={chatBusy}
               aiAvailable={!!host}
-              onSend={(t) => void askChat(t)}
+              onNew={newChat}
+              onOpen={(id) => {
+                leaveChat()
+                setActiveChatId(id)
+              }}
+              onClose={leaveChat}
+              onSend={(id, t) => void askChat(id, t)}
               onRevert={revertChatEdit}
-              onReset={() => setChat([])}
+              onRename={(id, title) => setChats((cs) => updateChat(cs, id, (c) => renameChat(c, title)))}
+              onRemove={(id) => {
+                setChats((cs) => cs.filter((c) => c.id !== id))
+                setActiveChatId(null)
+              }}
             />
           ) : (
             <ThreadPanel

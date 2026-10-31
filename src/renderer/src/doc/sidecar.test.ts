@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { createAnchor } from '../anchor/anchors'
 import { createThread, message } from '../thread/thread'
+import { createChat } from '../chat/chats'
 import { contentHash, parseSidecar, restoreThreads, serializeSidecar } from './sidecar'
 
 const doc = 'Ein **fettes** Wort und ein Link [hier](x).\n\nZweiter Absatz mit Jörg 😀.\n'
@@ -52,10 +53,17 @@ describe('Begleitdatei', () => {
     expect(m).toMatchObject({ kind: 'user', text: 'Hallo' })
   })
 
-  it('sichert den Chat auch ohne Threads', async () => {
-    const chat = [message({ kind: 'user', text: 'Fasse zusammen' }), message({ kind: 'ai', text: '**Kurz:** …' })]
-    const json = serializeSidecar(doc, [], [], chat, 'text.md', await contentHash(doc))!
-    expect(restoreThreads(doc, parseSidecar(json), await contentHash(doc)).chat).toEqual(chat)
+  it('sichert Chats auch ohne Threads, leere Chats nicht', async () => {
+    const used = { ...createChat(), title: 'Zusammenfassung', messages: [message({ kind: 'user', text: 'Fasse zusammen' }), message({ kind: 'ai', text: '**Kurz:** …' })] }
+    const json = serializeSidecar(doc, [], [], [used, createChat()], 'text.md', await contentHash(doc))!
+    expect(restoreThreads(doc, parseSidecar(json), await contentHash(doc)).chats).toEqual([used])
+    expect(serializeSidecar(doc, [], [], [createChat()], 'text.md', 'h')).toBeNull()
+  })
+
+  it('liest die frühe Fassung mit nur einem Chat', () => {
+    const legacy = JSON.stringify({ format: 'maid-sidecar', version: 1, document: 'x.md', contentHash: 'h', savedAt: '2026-10-31', threads: [], chat: [{ id: 'm', kind: 'user', text: 'Hallo', at: '2026-10-30' }] })
+    const [c] = parseSidecar(legacy).chats!
+    expect(c).toMatchObject({ title: 'Chat', createdAt: '2026-10-30', messages: [{ text: 'Hallo' }] })
   })
 
   it('lehnt fremde JSON-Dateien ab', () => {
