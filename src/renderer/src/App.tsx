@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { basicSetup } from 'codemirror'
 import { EditorState, Prec, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
@@ -29,7 +29,8 @@ import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
 import { createChat, renameChat, suggestTitle, updateChat, type Chat } from './chat/chats'
 import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer, type EditorFocus } from './chat/chat'
-import { MessageSquareText, MessagesSquare } from 'lucide-react'
+import { Link2, Link2Off, MessageSquareText, MessagesSquare } from 'lucide-react'
+import { useScrollSync } from './layout/useScrollSync'
 import {
   COLLAPSED_WIDTH,
   CollapseButton,
@@ -120,6 +121,23 @@ export function App() {
   const [dragging, setDragging] = useState<'split' | 'side' | null>(null)
   const [sideW, setSideW] = useState(loadSideWidth)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
+  /** Mitlaufendes Scrollen von Manuskript und Druckfahne (Kette im Titel der Druckfahne). */
+  const [syncScroll, setSyncScroll] = useState(() => {
+    try {
+      return localStorage.getItem('maid.syncScroll') !== 'off'
+    } catch {
+      return true
+    }
+  })
+  const toggleSyncScroll = () =>
+    setSyncScroll((on) => {
+      try {
+        localStorage.setItem('maid.syncScroll', on ? 'off' : 'on')
+      } catch {
+        // ohne Speicher gilt die Einstellung nur bis zum Neuladen
+      }
+      return !on
+    })
   const togglePane = (id: PaneId) =>
     setCollapsed((c) => {
       const next = toggleCollapsed(c, id)
@@ -260,6 +278,27 @@ export function App() {
       view.focus()
     },
   })
+
+  const { jumpTo } = useScrollSync({
+    viewRef,
+    previewRef,
+    segments: model.segments,
+    enabled: syncScroll && !collapsed.editor && !collapsed.preview,
+  })
+
+  /** Einfacher Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript. */
+  function onPreviewClick(e: MouseEvent<HTMLDivElement>) {
+    if (e.detail !== 1 || collapsed.editor) return
+    if ((e.target as HTMLElement).closest('a, .img-handle')) return
+    if (!window.getSelection()?.isCollapsed) return
+    const caret = document.caretPositionFromPoint?.(e.clientX, e.clientY)
+    const node = caret?.offsetNode
+    const span = node instanceof Text ? node.parentElement?.closest<HTMLElement>('[data-seg]') : null
+    const seg = span ? model.segments[Number(span.dataset.seg)] : undefined
+    if (!seg || !caret) return
+    const i = caret.offset
+    jumpTo(i < seg.text.length ? seg.starts[i] : seg.ends[seg.text.length - 1], e.clientY)
+  }
 
   /** Lädt relative Bildpfade über das lokale Bildprotokoll, relativ zum Ordner des Dokuments. */
   const resolveSrc = useMemo(() => {
@@ -680,9 +719,25 @@ export function App() {
           {collapsed.preview && <CollapsedStrip title="Druckfahne" onExpand={() => togglePane('preview')} />}
           <h2>
             Druckfahne
+            <button
+              className={`icon sync-toggle ${syncScroll ? 'on' : ''}`}
+              title={syncScroll ? 'Mitlaufendes Scrollen ist an – klicken zum Ausschalten' : 'Mitlaufendes Scrollen ist aus – klicken zum Einschalten'}
+              aria-label="Mitlaufendes Scrollen"
+              aria-pressed={syncScroll}
+              onClick={toggleSyncScroll}
+            >
+              {syncScroll ? <Link2 size={14} /> : <Link2Off size={14} />}
+            </button>
             <CollapseButton disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
           </h2>
-          <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} resolveSrc={resolveSrc} onImageResize={resizeImage} />
+          <Preview
+            ref={previewRef}
+            model={model}
+            onMouseUp={onPreviewMouseUp}
+            onClick={onPreviewClick}
+            resolveSrc={resolveSrc}
+            onImageResize={resizeImage}
+          />
         </section>
         <div {...splitterProps('side')} />
         <aside className={`pane threads ${(panel === 'comments' ? activeId : activeChatId) ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>

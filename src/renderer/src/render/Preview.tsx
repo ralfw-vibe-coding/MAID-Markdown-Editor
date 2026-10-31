@@ -1,4 +1,4 @@
-import { createElement, forwardRef, useRef, useState, type ReactNode } from 'react'
+import { createElement, forwardRef, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Preview as PreviewModel, RNode, Segment } from './buildPreview'
 
 type ImageOptions = {
@@ -67,11 +67,12 @@ function ImageView({ node, resolveSrc, onImageResize }: { node: Extract<RNode, {
 type Props = {
   model: PreviewModel
   onMouseUp?: () => void
+  onClick?: (e: MouseEvent<HTMLDivElement>) => void
   className?: string
 } & ImageOptions
 
 /** Druckfahne: rendert den Darstellungsbaum; jeder Textabschnitt trägt `data-seg`. */
-export const Preview = forwardRef<HTMLDivElement, Props>(function Preview({ model, onMouseUp, className = 'preview', ...images }, ref) {
+export const Preview = forwardRef<HTMLDivElement, Props>(function Preview({ model, onMouseUp, onClick, className = 'preview', ...images }, ref) {
   return (
     <div
       ref={ref}
@@ -79,6 +80,7 @@ export const Preview = forwardRef<HTMLDivElement, Props>(function Preview({ mode
       onMouseUp={onMouseUp}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest('a')) e.preventDefault()
+        onClick?.(e)
       }}
     >
       {toReact(model.root, model.segments, 0, images)}

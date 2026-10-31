@@ -211,3 +211,12 @@ button.chat-title.editable:hover { background: #f1efe9; }
 .font-list li { padding: 5px 8px; border-radius: 5px; font-size: 16px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .font-list li:hover { background: #f1efe9; }
 .font-list li.selected { background: #ffedd5; }
+
+/* Manuskript: der Editor scrollt selbst (nicht die Spalte) – Voraussetzung fürs mitlaufende Scrollen */
+.pane.manuscript { overflow: hidden; }
+.editor { min-height: 0; }
+
+/* Kette im Titel der Druckfahne: mitlaufendes Scrollen an/aus */
+.pane > h2 .sync-toggle { width: 22px; height: 20px; margin: -4px 4px -4px auto; }
+.pane > h2 .sync-toggle.on { color: var(--accent); }
+.pane > h2 .sync-toggle + .pane-toggle { margin-left: 0; }
