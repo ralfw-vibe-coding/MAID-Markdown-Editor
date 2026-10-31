@@ -129,6 +129,8 @@ export function App() {
   const splitters = visibleSplitters(collapsed)
   /** Zeigt Kommentare oder Chat und klappt das Seitenpanel dafür bei Bedarf auf. */
   const showSide = (p: 'comments' | 'chat') => {
+    // Ein noch leerer Kommentar (z. B. per ⇧⌘K angelegt) wird beim Wechsel zum Chat verworfen.
+    if (p === 'chat') discardIfEmpty(activeId)
     setPanel(p)
     setCollapsed((c) => {
       if (!c.side) return c
@@ -691,7 +693,7 @@ export function App() {
             <button role="tab" aria-selected={panel === 'comments'} className={panel === 'comments' ? 'active' : ''} onClick={() => setPanel('comments')}>
               <MessageSquareText size={14} /> Kommentare
             </button>
-            <button role="tab" aria-selected={panel === 'chat'} className={panel === 'chat' ? 'active' : ''} onClick={() => setPanel('chat')}>
+            <button role="tab" aria-selected={panel === 'chat'} className={panel === 'chat' ? 'active' : ''} onClick={() => showSide('chat')}>
               <MessagesSquare size={14} /> Chat
               {chatBusy.size > 0 && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
