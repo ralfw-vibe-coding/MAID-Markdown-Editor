@@ -72,7 +72,24 @@ const host = window.maid ?? null
 /** In der App startet MAID mit einem leeren Dokument, im Browser mit dem Probetext. */
 const initialDoc = host ? '' : sampleDoc
 
-type Pending = SourceRange & { x: number; y: number }
+/** Kommentar-Entwurf zu einer Markierung; `top`/`bottom` umfassen die Markierung (Fensterkoordinaten). */
+type Pending = SourceRange & { x: number; top: number; bottom: number }
+
+const POPOVER_GAP = 6
+const POPOVER_MARGIN = 8
+
+/**
+ * Lage des Kommentar-Fensters: unter der Markierung, wenn es dort ganz ins
+ * Fenster passt, sonst darüber; notfalls an den Fensterrand geschoben.
+ */
+function placePopover(p: Pending, width: number, height: number) {
+  const maxTop = window.innerHeight - height - POPOVER_MARGIN
+  const below = p.bottom + POPOVER_GAP
+  const above = p.top - POPOVER_GAP - height
+  const top = below <= maxTop ? below : above >= POPOVER_MARGIN ? above : Math.max(POPOVER_MARGIN, maxTop)
+  const left = Math.min(Math.max(POPOVER_MARGIN, p.x), window.innerWidth - width - POPOVER_MARGIN)
+  return { top, left }
+}
 
 /** Ziehbare Trenner zwischen den Spalten. */
 type Splitter = 'versions' | 'split' | 'side'
@@ -477,6 +494,17 @@ export function App() {
     CSS.highlights.set('maid-pending', new Highlight(...(pendingRange ? [pendingRange] : [])))
   }, [model, anchors, activeId, pending])
 
+  // Kommentar-Fenster erst messen, dann so legen, dass es ganz zu sehen ist.
+  const popoverRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = popoverRef.current
+    if (!pending || !el) return
+    const { top, left } = placePopover(pending, el.offsetWidth, el.offsetHeight)
+    el.style.top = `${top}px`
+    el.style.left = `${left}px`
+    el.style.visibility = 'visible'
+  }, [pending])
+
   function onPreviewMouseUp() {
     const sel = window.getSelection()
     const root = previewRef.current
@@ -486,7 +514,7 @@ export function App() {
     const src = domRangeToSource(range, root, model.segments)
     if (!src) return setPending(null)
     const rect = range.getBoundingClientRect()
-    setPending({ ...src, x: rect.left, y: rect.bottom + 6 })
+    setPending({ ...src, x: rect.left, top: rect.top, bottom: rect.bottom })
     setDraft('')
   }
 
@@ -963,7 +991,7 @@ export function App() {
       )}
 
       {pending && (
-        <div className="popover" style={{ left: pending.x, top: pending.y }}>
+        <div className="popover" ref={popoverRef} style={{ visibility: 'hidden' }}>
           <div className="src">
             Quelle [{pending.from}, {pending.to}): <code>{doc.slice(pending.from, pending.to)}</code>
           </div>
