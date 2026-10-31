@@ -29,7 +29,13 @@ import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
 import { createChat, renameChat, suggestTitle, updateChat, type Chat } from './chat/chats'
 import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer, type EditorFocus } from './chat/chat'
-import { Link2, Link2Off, MessageSquareText, MessagesSquare } from 'lucide-react'
+import { History, Link2, Link2Off, MessageSquareText, MessagesSquare } from 'lucide-react'
+import { useVersions } from './versions/useVersions'
+import { VersionsPanel } from './versions/VersionsPanel'
+import { DiffView } from './versions/DiffView'
+import { SaveVersionDialog } from './versions/SaveVersionDialog'
+import { lineChanges } from './versions/versions'
+import { buildVersionMessagePrompt, VERSION_MESSAGE_SCHEMA, VERSION_MESSAGE_SYSTEM } from './versions/versionMessage'
 import { useScrollSync } from './layout/useScrollSync'
 import {
   COLLAPSED_WIDTH,
@@ -64,6 +70,10 @@ const host = window.maid ?? null
 const initialDoc = host ? '' : sampleDoc
 
 type Pending = SourceRange & { x: number; y: number }
+
+/** Inhalt des Seitenpanels. */
+type SidePanel = 'comments' | 'chat' | 'versions'
+const PANEL_TITLE: Record<SidePanel, string> = { comments: 'Kommentare', chat: 'Chat', versions: 'Versionen' }
 
 /** Bilddateien aus Zwischenablage oder Ziehen. */
 function imageFiles(list: FileList | undefined | null): File[] {
@@ -105,7 +115,7 @@ export function App() {
   /** Threads, in denen gerade eine KI-Anfrage läuft. */
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
   /** Seitenpanel: Kommentar-Threads oder freier Chat zum ganzen Dokument. */
-  const [panel, setPanel] = useState<'comments' | 'chat'>('comments')
+  const [panel, setPanel] = useState<SidePanel>('comments')
   const [chats, setChats] = useState<Chat[]>([])
   /** Geöffneter Chat; null zeigt die Liste der Chats. */
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
@@ -113,6 +123,9 @@ export function App() {
   const [chatBusy, setChatBusy] = useState<ReadonlySet<string>>(new Set())
   const { settings, update: updateSettings } = useSettings(host)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [saveVersionOpen, setSaveVersionOpen] = useState(false)
+  /** Version, deren Vergleich anstelle der Druckfahne steht. */
+  const [shownVersionId, setShownVersionId] = useState<string | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
   const [draft, setDraft] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -146,7 +159,7 @@ export function App() {
     })
   const splitters = visibleSplitters(collapsed)
   /** Zeigt Kommentare oder Chat und klappt das Seitenpanel dafür bei Bedarf auf. */
-  const showSide = (p: 'comments' | 'chat') => {
+  const showSide = (p: SidePanel) => {
     // Ein noch leerer Kommentar (z. B. per ⇧⌘K angelegt) wird beim Wechsel zum Chat verworfen.
     if (p === 'chat') discardIfEmpty(activeId)
     setPanel(p)
@@ -270,6 +283,7 @@ export function App() {
       view.dispatch({ effects: setAnchorsEffect.of(loaded) })
       setThreads(loadedThreads)
       setChats(loadedChats)
+      setShownVersionId(null)
       setActiveChatId(null)
       setChatBusy(new Set())
       setBusy(new Set())
@@ -283,7 +297,7 @@ export function App() {
     viewRef,
     previewRef,
     segments: model.segments,
-    enabled: syncScroll && !collapsed.editor && !collapsed.preview,
+    enabled: syncScroll && !collapsed.editor && !collapsed.preview && !shownVersionId,
   })
 
   /** Einfacher Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript. */
@@ -308,6 +322,53 @@ export function App() {
     const base = `${LOCAL_FILE_SCHEME}://local${dir}/`
     return (src: string) => (/^[a-z][a-z0-9+.-]*:/i.test(src) ? src : new URL(src, base).href)
   }, [file.path])
+
+  const versions = useVersions(host, file.path)
+  const shownVersion = versions.versions.find((v) => v.id === shownVersionId)
+  useEffect(() => {
+    if (versions.error) file.showError(versions.error)
+  }, [versions.error])
+
+  async function saveVersion(message: string) {
+    const view = viewRef.current
+    if (!host || !view) return
+    setSaveVersionOpen(false)
+    try {
+      const docPath = await file.ensurePath()
+      if (!docPath) return file.showError('Für Versionen das Dokument bitte zuerst sichern – sie liegen neben der Datei.')
+      await versions.add(docPath, view.state.doc.toString(), message)
+      showSide('versions')
+    } catch (err) {
+      file.showError(`Version konnte nicht gesichert werden: ${(err as Error).message}`)
+    }
+  }
+
+  async function suggestVersionMessage(): Promise<string> {
+    const view = viewRef.current
+    if (!host || !view) throw new Error('Nur in der App verfügbar.')
+    const prompt = buildVersionMessagePrompt(versions.versions.at(-1)?.text ?? '', view.state.doc.toString())
+    const result = await host.askAi({ prompt, systemPrompt: VERSION_MESSAGE_SYSTEM, schema: VERSION_MESSAGE_SCHEMA })
+    if (!result.ok) throw new Error(result.error)
+    return String((result.data as { message?: unknown }).message ?? '')
+  }
+
+  /**
+   * Zurück zu einer Version: Der jetzige Stand wird vorher automatisch als Version
+   * gesichert; dann wird nur geändert, was sich unterscheidet (ein Undo-Schritt).
+   */
+  async function restoreVersion(id: string) {
+    const view = viewRef.current
+    const target = versions.versions.find((v) => v.id === id)
+    if (!host || !view || !target || !file.path) return
+    const current = view.state.doc.toString()
+    try {
+      if (versions.versions.at(-1)?.text !== current) await versions.add(file.path, current, `Vor Rückkehr zu „${target.message}“`, true)
+      view.dispatch({ changes: lineChanges(current, target.text), userEvent: 'input.restore', scrollIntoView: true })
+      setShownVersionId(null)
+    } catch (err) {
+      file.showError(`Zurückgehen fehlgeschlagen: ${(err as Error).message}`)
+    }
+  }
 
   async function insertImages(files: File[], from: number, to: number) {
     const view = viewRef.current
@@ -532,6 +593,7 @@ export function App() {
       host?.onMenu((command) => {
         if (command === 'askAi') threadFromEditorRef.current()
         if (command === 'settings') setSettingsOpen(true)
+        if (command === 'saveVersion') setSaveVersionOpen(true)
         if (command === 'chat') newChatRef.current()
         if (command.startsWith('format:')) {
           // Nicht in Eingabefeldern (Chat, Kommentar) – dort gilt das Kürzel nicht dem Manuskript.
@@ -730,19 +792,31 @@ export function App() {
             </button>
             <CollapseButton disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
           </h2>
-          <Preview
-            ref={previewRef}
-            model={model}
-            onMouseUp={onPreviewMouseUp}
-            onClick={onPreviewClick}
-            resolveSrc={resolveSrc}
-            onImageResize={resizeImage}
-          />
+          {shownVersion && (
+            <DiffView
+              version={shownVersion}
+              previous={versions.versions[versions.versions.indexOf(shownVersion) - 1]}
+              current={doc}
+              onRestore={() => void restoreVersion(shownVersion.id)}
+              onClose={() => setShownVersionId(null)}
+            />
+          )}
+          {/* Die Druckfahne bleibt beim Vergleich im DOM (Hervorhebungen, Scrollposition). */}
+          <div className={shownVersion ? 'hidden-preview' : 'preview-host'}>
+            <Preview
+              ref={previewRef}
+              model={model}
+              onMouseUp={onPreviewMouseUp}
+              onClick={onPreviewClick}
+              resolveSrc={resolveSrc}
+              onImageResize={resizeImage}
+            />
+          </div>
         </section>
         <div {...splitterProps('side')} />
         <aside className={`pane threads ${(panel === 'comments' ? activeId : activeChatId) ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>
           {collapsed.side && (
-            <CollapsedStrip title={panel === 'chat' ? 'Chat' : 'Kommentare'} onExpand={() => togglePane('side')} />
+            <CollapsedStrip title={PANEL_TITLE[panel]} onExpand={() => togglePane('side')} />
           )}
           <div className="panel-tabs" role="tablist">
             <button role="tab" aria-selected={panel === 'comments'} className={panel === 'comments' ? 'active' : ''} onClick={() => setPanel('comments')}>
@@ -752,9 +826,27 @@ export function App() {
               <MessagesSquare size={14} /> Chat
               {chatBusy.size > 0 && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
+            <button role="tab" aria-selected={panel === 'versions'} className={panel === 'versions' ? 'active' : ''} onClick={() => showSide('versions')}>
+              <History size={14} /> Versionen
+            </button>
             <CollapseButton disabled={cannotCollapse(collapsed, 'side')} onClick={() => togglePane('side')} />
           </div>
-          {panel === 'chat' ? (
+          {panel === 'versions' ? (
+            <VersionsPanel
+              versions={versions.versions}
+              shownId={shownVersionId}
+              available={!!host}
+              onSave={() => setSaveVersionOpen(true)}
+              onShow={(id) => {
+                setShownVersionId(id)
+                if (collapsed.preview) togglePane('preview')
+              }}
+              onRemove={(id) => {
+                if (file.path) void versions.remove(file.path, id)
+                if (shownVersionId === id) setShownVersionId(null)
+              }}
+            />
+          ) : panel === 'chat' ? (
             <ChatPanel
               doc={doc}
               chats={chats}
@@ -793,6 +885,14 @@ export function App() {
           )}
         </aside>
       </main>
+
+      {saveVersionOpen && (
+        <SaveVersionDialog
+          onSuggest={host ? suggestVersionMessage : undefined}
+          onSave={(m) => void saveVersion(m)}
+          onClose={() => setSaveVersionOpen(false)}
+        />
+      )}
 
       {settingsOpen && (
         <SettingsDialog host={host} settings={settings} onChange={updateSettings} onClose={() => setSettingsOpen(false)} />

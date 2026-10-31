@@ -30,7 +30,7 @@ export function useScrollSync({ viewRef, previewRef, segments, enabled }: Option
   const scrollers = () => {
     const view = viewRef.current
     const preview = previewRef.current
-    const pane = preview?.parentElement
+    const pane = preview?.closest<HTMLElement>('.pane')
     return view && preview && pane ? { view, preview, editor: view.scrollDOM, pane } : null
   }
   const getPairs = (s: NonNullable<ReturnType<typeof scrollers>>) =>

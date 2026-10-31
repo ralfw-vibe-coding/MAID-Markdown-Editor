@@ -220,3 +220,47 @@ button.chat-title.editable:hover { background: #f1efe9; }
 .pane > h2 .sync-toggle { width: 22px; height: 20px; margin: -4px 4px -4px auto; }
 .pane > h2 .sync-toggle.on { color: var(--accent); }
 .pane > h2 .sync-toggle + .pane-toggle { margin-left: 0; }
+
+/* Versionen */
+.preview-host { display: contents; }
+.hidden-preview { display: none; }
+.versions-list .version { cursor: pointer; }
+.versions-list .version.shown { border-color: var(--accent); }
+.versions-list .version.auto .chat-title { font-weight: 500; color: var(--muted); font-style: italic; }
+.version-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.version-head .chat-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.version-head button.icon { opacity: 0; }
+.versions-list .version:hover .version-head button.icon, .version-head button.icon.armed { opacity: 1; }
+.thread-meta .plus { color: #166534; }
+.thread-meta .minus { color: #991b1b; }
+
+.diff-view { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--paper); }
+.diff-bar { position: sticky; top: 30px; z-index: 1; display: flex; flex-direction: column; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--paper); font-size: 13px; }
+.diff-row { display: flex; align-items: center; gap: 8px; }
+.diff-row .restore { margin-left: auto; }
+.diff-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-mode { display: flex; gap: 2px; background: #f1efe9; border-radius: 6px; padding: 2px; }
+.diff-mode button { font: inherit; font-size: 12px; padding: 3px 8px; border: none; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
+.diff-mode button.active { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.diff-bar .restore { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; padding: 4px 9px; border: 1px solid var(--accent); border-radius: 6px; background: var(--paper); color: var(--accent); cursor: pointer; white-space: nowrap; }
+.diff-bar .restore:hover:not(:disabled) { background: var(--accent); color: white; }
+.diff-bar .restore:disabled { opacity: .4; cursor: default; }
+.diff-legend { padding: 6px 28px 0; font-size: 12px; }
+.diff-body { padding: 8px 28px 60px; font-family: var(--preview-font); font-size: calc(var(--preview-size) - 1px); line-height: 1.55; }
+.diff-par { white-space: pre-wrap; margin: 10px 0; padding: 4px 8px; border-radius: 6px; border-left: 3px solid transparent; }
+.diff-par.same { color: var(--muted); }
+.diff-par.changed { border-left-color: #f59e0b; background: #fffbeb; }
+.diff-par.added { border-left-color: #16a34a; background: #f0fdf4; }
+.diff-par.removed { border-left-color: #dc2626; background: #fef2f2; }
+.diff-par del { background: #fee2e2; color: #991b1b; }
+.diff-par ins { background: #dcfce7; color: #166534; text-decoration: none; }
+.diff-fold { display: block; width: 100%; margin: 6px 0; padding: 4px; font: inherit; font-family: -apple-system, sans-serif; font-size: 12px; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 6px; cursor: pointer; }
+.diff-fold:hover { color: var(--ink); border-color: var(--muted); }
+
+.modal.save-version input { width: 100%; margin-top: 10px; font-size: 14px; padding: 6px 8px; }
+.modal.save-version .hint-text { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.modal.save-version .error-text { margin: 6px 0 0; color: #991b1b; font-size: 12px; }
+.modal.save-version .actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+.modal.save-version .actions button { display: inline-flex; align-items: center; gap: 5px; font: inherit; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; }
+.modal.save-version .actions .primary { background: var(--accent); border-color: var(--accent); color: white; }
+.modal.save-version .actions button:disabled { opacity: .5; cursor: default; }

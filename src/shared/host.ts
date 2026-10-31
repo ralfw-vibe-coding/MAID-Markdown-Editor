@@ -10,7 +10,7 @@ export type OpenedFile = {
 /** Formatierungen im Manuskript (Menü „Format“, Tastenkürzel, Symbolleiste). */
 export type FormatCommand = 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'link'
 
-export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings' | `format:${FormatCommand}`
+export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings' | 'saveVersion' | `format:${FormatCommand}`
 
 export type DiscardChoice = 'save' | 'discard' | 'cancel'
 
@@ -81,11 +81,16 @@ export interface MaidHost {
    * relativ zum Dokument (für den Markdown-Bildverweis).
    */
   saveImage(documentPath: string, data: Uint8Array, extension: string): Promise<string>
+  /** Inhalt der Versionsdatei des Dokuments oder null, wenn es noch keine gibt. */
+  readVersions(documentPath: string): Promise<string | null>
+  writeVersions(documentPath: string, content: string): Promise<void>
   /** Meldet dem Hauptprozess, dass die Oberfläche Befehle entgegennehmen kann. */
   ready(): void
 }
 
 export const SIDECAR_SUFFIX = '.maid.json'
+/** Versionen eines Dokuments liegen in `<datei>.versions.json` daneben. */
+export const VERSIONS_SUFFIX = '.versions.json'
 
 /** Bilder eines Dokuments liegen neben ihm in „<Name ohne Endung> - Images“. */
 export function imagesFolderName(documentFileName: string): string {
@@ -113,4 +118,6 @@ export const channels = {
   setSettings: 'settings:set',
   claudeInfo: 'ai:claude-info',
   saveImage: 'file:save-image',
+  readVersions: 'file:read-versions',
+  writeVersions: 'file:write-versions',
 } as const

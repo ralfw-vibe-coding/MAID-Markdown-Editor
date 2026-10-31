@@ -42,3 +42,11 @@ Alle Positionen sind UTF-16-Code-Unit-Offsets in den Markdown-Quelltext (wie JS-
 - Verweis im Markdown relativ, in spitzen Klammern wegen der Leerzeichen: `![](<test gedicht - Images/bild-….png>)`.
 - Anzeigebreite in der Druckfahne wie in Obsidian im Alt-Text: `![Foto|300](…)`. Andere Markdown-Programme zeigen das Bild trotzdem; nur der Alt-Text enthält dann „|300“.
 - Ein neues, noch nie gesichertes Dokument wird vor dem ersten Bild gesichert – sonst gäbe es keinen Ort für den Bilderordner.
+
+## E7 · Versionen ohne git
+
+- „Ablage › Version sichern …“ (⌥⌘S) sichert den jetzigen Stand des Manuskripts mit einer Nachricht (wie eine Commit-Nachricht); Claude kann sie aus den Änderungen vorschlagen.
+- Versionen liegen in `<dokument>.md.versions.json` neben dem Dokument – getrennt von der Begleitdatei, damit ⌘S schnell bleibt. Volle Textstände, keine Deltas.
+- Reiter „Versionen“: Liste mit Nachricht, Zeit, +/− Wörter. Klick zeigt anstelle der Druckfahne einen absatzweisen, wortgenauen Vergleich („Seitdem“ bzw. „Diese Version“ gegenüber der vorherigen).
+- „Zurück zu dieser Version“ sichert den jetzigen Stand vorher automatisch (falls noch nicht gesichert) und ändert nur die abweichenden Zeilen – als ein Undo-Schritt; Kommentare in unveränderten Teilen bleiben verankert.
+- Bilder sind nur additiv: Der Bilderordner wird nie aufgeräumt, auch wenn eine neuere Version ein Bild nicht mehr verwendet. So findet jede alte Version ihre Bilder.
