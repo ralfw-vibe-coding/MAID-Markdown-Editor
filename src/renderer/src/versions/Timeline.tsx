@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Maximize2, Minus, Plus } from 'lucide-react'
 import { axisTicks, clusterPoints, fitWindow, formatWhen, panWindow, revealTime, toFraction, zoomWindow, type TimeWindow } from './timeWindow'
-import type { Version } from './versions'
+import { fassungTitle, type Version } from './versions'
 
 /** Punkte, die enger liegen, werden zu einem Bündel. */
 const CLUSTER_PX = 14
@@ -95,7 +95,7 @@ export function Timeline({ versions, selectedId, onSelect }: Props) {
   }
 
   return (
-    <div className="timeline" aria-label="Zeitstrahl der Versionen">
+    <div className="timeline" aria-label="Zeitstrahl der Fassungen">
       <div
         className="timeline-track"
         ref={track}
@@ -129,7 +129,7 @@ export function Timeline({ versions, selectedId, onSelect }: Props) {
                 key={v.id}
                 className={`timeline-dot ${v.id === selectedId ? 'selected' : ''} ${v.auto ? 'auto' : ''}`}
                 style={{ left: g.x }}
-                title={`${v.message || '(ohne Nachricht)'} – ${formatWhen(v.createdAt)}`}
+                title={`${fassungTitle(v)} – ${formatWhen(v.createdAt)}`}
                 aria-label={v.message}
                 onClick={() => onSelect(v.id === selectedId ? null : v.id)}
               />
@@ -141,7 +141,7 @@ export function Timeline({ versions, selectedId, onSelect }: Props) {
               key={`g${g.indices[0]}`}
               className={`timeline-cluster ${containsSelected ? 'selected' : ''}`}
               style={{ left: g.x }}
-              title={`${g.indices.length} Versionen ${formatWhen(versions[g.indices[0]].createdAt)} – ${formatWhen(versions[g.indices.at(-1)!].createdAt)}: klicken zum Hineinzoomen`}
+              title={`${g.indices.length} Fassungen ${formatWhen(versions[g.indices[0]].createdAt)} – ${formatWhen(versions[g.indices.at(-1)!].createdAt)}: klicken zum Hineinzoomen`}
               onClick={() => zoomTo(g.indices)}
             >
               {g.indices.length}
@@ -152,7 +152,7 @@ export function Timeline({ versions, selectedId, onSelect }: Props) {
           <button
             className={`timeline-now ${selectedId === null ? 'selected' : ''}`}
             style={{ left: nowX }}
-            title="Jetzt – ungesicherte Änderungen seit der neuesten Version"
+            title="Aktueller Stand – noch nicht festgehalten"
             aria-label="Jetzt"
             onClick={() => onSelect(null)}
           />

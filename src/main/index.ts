@@ -92,6 +92,8 @@ function createWindow(path?: string): DocWindow {
   win.on('close', async (e) => {
     if (!dw.dirty || dw.closeConfirmed) return
     e.preventDefault()
+    // Mit Auto-Speichern wird ohne Rückfrage gespeichert (nur Dokumente mit Dateinamen).
+    if (getSettings().autoSave && dw.path) return void win.webContents.send(channels.menu, 'saveAndClose' satisfies MenuCommand)
     const choice = await askDiscard(win, docName(dw))
     if (choice === 'save') win.webContents.send(channels.menu, 'saveAndClose' satisfies MenuCommand)
     else if (choice === 'discard') {
@@ -125,9 +127,9 @@ async function showOpenDialog() {
 async function askDiscard(parent: BrowserWindow, name: string): Promise<DiscardChoice> {
   const { response } = await dialog.showMessageBox(parent, {
     type: 'warning',
-    message: `Änderungen an „${name}“ sichern?`,
-    detail: 'Ohne Sichern gehen die Änderungen und neue Kommentare verloren.',
-    buttons: ['Sichern', 'Nicht sichern', 'Abbrechen'],
+    message: `Änderungen an „${name}“ speichern?`,
+    detail: 'Ohne Speichern gehen die Änderungen und neue Kommentare verloren.',
+    buttons: ['Speichern', 'Nicht speichern', 'Abbrechen'],
     defaultId: 0,
     cancelId: 2,
   })
@@ -227,17 +229,17 @@ function buildMenu() {
     {
       label: app.name,
       submenu: [
-        { role: 'about' },
+        { role: 'about', label: `Über ${app.name}` },
         { type: 'separator' },
         { label: 'Einstellungen …', accelerator: 'CmdOrCtrl+,', click: () => send('settings') },
         { type: 'separator' },
-        { role: 'services' },
+        { role: 'services', label: 'Dienste' },
         { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
+        { role: 'hide', label: `${app.name} ausblenden` },
+        { role: 'hideOthers', label: 'Andere ausblenden' },
+        { role: 'unhide', label: 'Alle einblenden' },
         { type: 'separator' },
-        { role: 'quit' },
+        { role: 'quit', label: `${app.name} beenden` },
       ],
     },
     {
@@ -245,16 +247,30 @@ function buildMenu() {
       submenu: [
         { label: 'Neu', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
         { label: 'Öffnen …', accelerator: 'CmdOrCtrl+O', click: () => void showOpenDialog() },
-        { role: 'recentDocuments', submenu: [{ role: 'clearRecentDocuments' }] },
+        { role: 'recentDocuments', label: 'Zuletzt benutzt', submenu: [{ role: 'clearRecentDocuments', label: 'Liste löschen' }] },
         { type: 'separator' },
-        { label: 'Sichern', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
-        { label: 'Sichern unter …', accelerator: 'Shift+CmdOrCtrl+S', click: () => send('saveAs') },
-        { label: 'Version sichern …', accelerator: 'Alt+CmdOrCtrl+S', click: () => send('saveVersion') },
+        { label: 'Speichern', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
+        { label: 'Speichern unter …', accelerator: 'Shift+CmdOrCtrl+S', click: () => send('saveAs') },
+        { label: 'Fassung festhalten …', accelerator: 'Alt+CmdOrCtrl+S', click: () => send('saveVersion') },
         { type: 'separator' },
-        { role: 'close' },
+        { role: 'close', label: 'Fenster schließen' },
       ],
     },
-    { role: 'editMenu' },
+    // Standardmenüs mit deutschen Bezeichnungen (Electron liefert sie sonst englisch).
+    {
+      label: 'Bearbeiten',
+      submenu: [
+        { role: 'undo', label: 'Widerrufen' },
+        { role: 'redo', label: 'Wiederholen' },
+        { type: 'separator' },
+        { role: 'cut', label: 'Ausschneiden' },
+        { role: 'copy', label: 'Kopieren' },
+        { role: 'paste', label: 'Einsetzen' },
+        { role: 'pasteAndMatchStyle', label: 'Einsetzen und Stil anpassen' },
+        { role: 'delete', label: 'Löschen' },
+        { role: 'selectAll', label: 'Alles auswählen' },
+      ],
+    },
     {
       label: 'Format',
       submenu: [
@@ -275,8 +291,29 @@ function buildMenu() {
         { label: 'Chat mit Manuskript', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
       ],
     },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
+    {
+      label: 'Darstellung',
+      submenu: [
+        { role: 'reload', label: 'Neu laden' },
+        { role: 'toggleDevTools', label: 'Entwicklerwerkzeuge' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: 'Originalgröße' },
+        { role: 'zoomIn', label: 'Vergrößern' },
+        { role: 'zoomOut', label: 'Verkleinern' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: 'Vollbildmodus' },
+      ],
+    },
+    {
+      label: 'Fenster',
+      role: 'window',
+      submenu: [
+        { role: 'minimize', label: 'Im Dock ablegen' },
+        { role: 'zoom', label: 'Zoomen' },
+        { type: 'separator' },
+        { role: 'front', label: 'Alle nach vorne bringen' },
+      ],
+    },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }

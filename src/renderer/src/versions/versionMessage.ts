@@ -1,9 +1,11 @@
 import { diffParagraphs } from './versions'
 
 /** Claude formuliert die Nachricht einer Version aus den Änderungen – wie eine Commit-Nachricht. */
-export const VERSION_MESSAGE_SYSTEM = `Du formulierst kurze Versionsnachrichten für Texte, wie Commit-Nachrichten.
-- Sprache wie der Text, höchstens 60 Zeichen, ohne Punkt am Ende.
-- Beschreibe inhaltlich, was sich geändert hat (z. B. „Einleitung gestrafft, Abschnitt zu Bildern ergänzt“), nicht technisch („Zeilen geändert“).`
+export const VERSION_MESSAGE_SYSTEM = `Du benennst Fassungen eines Textes, ähnlich einer Commit-Nachricht, aber für Autoren.
+Beschreibe den inhaltlichen Kern der Änderungen: Was bedeuten sie für Aussage, Argumentation, Ton oder Aufbau des Textes? Was kann der Leser jetzt, was er vorher nicht konnte?
+- Nicht aufzählen, welche Wörter oder Absätze sich geändert haben, sondern die Wirkung benennen – z. B. „Leitidee schärfer auf Zusammenarbeit ausgerichtet“, „Bilder-Kapitel ergänzt, Ablage geklärt“, „Ton der Einleitung persönlicher“.
+- Bei sehr kleinen Änderungen (Tippfehler, Kommas): z. B. „Kleine Korrekturen“.
+- Sprache wie der Text, höchstens 70 Zeichen, ohne Punkt am Ende, ohne Anführungszeichen.`
 
 export const VERSION_MESSAGE_SCHEMA = {
   type: 'object',
@@ -25,6 +27,6 @@ export function buildVersionMessagePrompt(previous: string, current: string): st
         : `${d.type === 'added' ? 'NEU' : 'ENTFERNT'}: ${clip(d.text)}`,
     )
   return previous
-    ? `Änderungen seit der letzten Version:\n\n${parts.join('\n\n') || '(keine)'}`
-    : `Erste Version des Textes. Anfang:\n\n${clip(current, 2000)}`
+    ? `Änderungen seit der letzten Fassung:\n\n${parts.join('\n\n') || '(keine)'}`
+    : `Erste Fassung des Textes. Anfang:\n\n${clip(current, 2000)}`
 }

@@ -2,7 +2,6 @@
 
 Wünsche und Punkte, die noch nicht eingeplant sind, aber nicht verloren gehen sollen.
 
-- **Menü eindeutschen:** Electron-Standardeinträge („Open Recent“, „Close Window“, Bearbeiten-, Darstellung-, Fenster-Menü) erscheinen noch englisch.
 - **Undo über das Menü:** ⌘Z per Tastatur wirkt im Editor; ob „Bearbeiten › Widerrufen“ per Mausklick im Menü bei CodeMirror ankommt, ist ungeprüft. Ggf. eigene Menüeinträge, die Undo/Redo an den Editor weiterreichen.
 - **Externe Änderungen erkennen:** Wird die geöffnete Datei außerhalb von MAID geändert, Konflikt erkennen und anbieten, neu zu laden.
 - **App-Paket:** Eigenes App-Icon, Name „MAID“ statt „Electron“, `.md`-Dateizuordnung im Finder (electron-builder). Nebenbei: Solange MAID als „Electron“ läuft, ist es für Automatisierung nicht von anderen Electron-Entwicklungs-Apps zu unterscheiden.

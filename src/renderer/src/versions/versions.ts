@@ -23,6 +23,11 @@ export type VersionsFile = {
   versions: Version[]
 }
 
+/** Anzeigename einer Fassung; automatische ohne Bezeichnung heißen „Automatisch festgehalten“. */
+export function fassungTitle(v: Version): string {
+  return v.message || (v.auto ? 'Automatisch festgehalten' : '(ohne Bezeichnung)')
+}
+
 export function parseVersions(json: string): Version[] {
   const data = JSON.parse(json) as VersionsFile
   if (data?.format !== 'maid-versions' || !Array.isArray(data.versions)) throw new Error('Unbekanntes Format der Versionsdatei')

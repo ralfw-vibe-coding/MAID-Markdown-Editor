@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Sparkles } from 'lucide-react'
 import { ConfirmDeleteButton } from '../layout/ConfirmDeleteButton'
 import { DiffView } from './DiffView'
 import { Timeline } from './Timeline'
 import { formatWhen } from './timeWindow'
-import { wordStats, type Version } from './versions'
+import { fassungTitle, wordStats, type Version } from './versions'
 
 type Props = {
   versions: Version[]
@@ -12,10 +11,11 @@ type Props = {
   selectedId: string | null
   current: string
   available: boolean
-  /** Ändert sich, wenn das Nachrichtenfeld den Fokus bekommen soll (⌥⌘S). */
+  /** Ändert sich, wenn das Bezeichnungsfeld den Fokus bekommen soll (⌥⌘S). */
   focusToken: number
+  /** Leere Bezeichnung: Claude formuliert sie aus dem inhaltlichen Kern der Änderungen. */
   onSave: (message: string) => Promise<void>
-  onSuggest?: () => Promise<string>
+  aiAvailable: boolean
   onSelect: (id: string | null) => void
   onRestore: (id: string) => void
   onRemove: (id: string) => void
@@ -34,13 +34,13 @@ export function VersionsPane(props: Props) {
   const previous = selected ? versions[versions.indexOf(selected) - 1] : undefined
   const latest = versions.at(-1)
 
-  if (!available) return <p className="threads-empty muted">Versionen gibt es nur in der App.</p>
+  if (!available) return <p className="threads-empty muted">Fassungen gibt es nur in der App.</p>
   return (
     <div className="versions-pane">
       <SaveForm {...props} />
       {versions.length === 0 ? (
         <p className="threads-empty muted">
-          Noch keine Versionen. Eine Version sichert den jetzigen Stand mit einer Nachricht – du kannst später vergleichen und dahin zurückgehen.
+          Noch keine Fassungen. „Festhalten“ hält den jetzigen Stand als Fassung fest – du kannst später vergleichen und dahin zurückgehen.
         </p>
       ) : (
         <>
@@ -48,14 +48,14 @@ export function VersionsPane(props: Props) {
           <VersionList {...props} unsaved={latest ? latest.text !== current : false} latestText={latest?.text ?? ''} />
           {selected ? (
             <DiffView
-              title={selected.message || '(ohne Nachricht)'}
+              title={fassungTitle(selected)}
               meta={formatWhen(selected.createdAt)}
-              legend={previous ? 'Was diese Version gegenüber der vorherigen geändert hat' : 'Erste Version'}
+              legend={previous ? 'Was diese Fassung gegenüber der vorherigen geändert hat' : 'Erste Fassung'}
               before={previous?.text ?? ''}
               after={selected.text}
-              emptyText="Diese Version hat nichts geändert."
-              restoreLabel="Zurück zu dieser Version"
-              restoreTitle="Manuskript auf diese Version zurücksetzen (vorher wird der jetzige Stand gesichert)"
+              emptyText="Diese Fassung hat nichts geändert."
+              restoreLabel="Zurück zu dieser Fassung"
+              restoreTitle="Manuskript auf diese Fassung zurücksetzen (vorher wird der jetzige Stand festgehalten)"
               onRestore={selected.text === current ? undefined : () => props.onRestore(selected.id)}
               onClose={() => props.onSelect(null)}
             />
@@ -63,13 +63,13 @@ export function VersionsPane(props: Props) {
             latest && (
               <DiffView
                 title="Aktueller Stand"
-                meta="nicht gesichert"
-                legend={`Änderungen seit „${latest.message || 'letzte Version'}“`}
+                meta="nicht festgehalten"
+                legend={`Änderungen seit „${fassungTitle(latest)}“`}
                 before={latest.text}
                 after={current}
-                emptyText="Alles ist als Version gesichert."
+                emptyText="Alles ist als Fassung festgehalten."
                 restoreLabel="Änderungen verwerfen"
-                restoreTitle={`Zurück zu „${latest.message}“ – der jetzige Stand wird vorher als Version gesichert`}
+                restoreTitle={`Zurück zu „${fassungTitle(latest)}“ – der jetzige Stand wird vorher festgehalten`}
                 onRestore={latest.text === current ? undefined : () => props.onRestore(latest.id)}
               />
             )
@@ -80,9 +80,9 @@ export function VersionsPane(props: Props) {
   )
 }
 
-function SaveForm({ focusToken, onSave, onSuggest }: Props) {
+function SaveForm({ focusToken, onSave, aiAvailable }: Props) {
   const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState<'suggest' | 'save' | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
@@ -90,23 +90,19 @@ function SaveForm({ focusToken, onSave, onSuggest }: Props) {
     if (focusToken) input.current?.focus()
   }, [focusToken])
 
-  const run = async (kind: 'suggest' | 'save', f: () => Promise<void>) => {
-    setBusy(kind)
+  const save = async () => {
+    if (busy) return
+    setBusy(true)
     setError(null)
     try {
-      await f()
+      await onSave(message.trim())
+      setMessage('')
     } catch (err) {
       setError((err as Error).message)
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
-  const save = () =>
-    message.trim() &&
-    run('save', async () => {
-      await onSave(message.trim())
-      setMessage('')
-    })
 
   return (
     <div className="version-save">
@@ -114,24 +110,14 @@ function SaveForm({ focusToken, onSave, onSuggest }: Props) {
         <input
           ref={input}
           type="text"
-          placeholder="Neue Version: Was hat sich geändert?"
+          placeholder={aiAvailable ? 'Bezeichnung – leer: Claude formuliert sie' : 'Bezeichnung der Fassung'}
           value={message}
+          disabled={busy}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void save()}
         />
-        {onSuggest && (
-          <button
-            className="icon"
-            title="Nachricht von Claude vorschlagen lassen"
-            aria-label="Vorschlag von Claude"
-            disabled={busy !== null}
-            onClick={() => void run('suggest', async () => setMessage(await onSuggest()))}
-          >
-            <Sparkles size={15} className={busy === 'suggest' ? 'spinning' : undefined} />
-          </button>
-        )}
-        <button className="primary" disabled={!message.trim() || busy !== null} onClick={() => void save()}>
-          Sichern
+        <button className="primary" disabled={busy || (!message.trim() && !aiAvailable)} onClick={() => void save()} title="Jetzigen Stand als Fassung festhalten (⌥⌘S)">
+          {busy && !message.trim() ? 'Claude benennt …' : 'Festhalten'}
         </button>
       </div>
       {error && <p className="error-text">{error}</p>}
@@ -149,16 +135,16 @@ function VersionList({ versions, selectedId, current, unsaved, latestText, onSel
   }, [selectedId])
   return (
     <div className="version-list" ref={list}>
-      <div className={`version-row current ${selectedId === null ? 'selected' : ''}`} onClick={() => onSelect(null)} title="Der Stand im Manuskript – noch keine Version">
+      <div className={`version-row current ${selectedId === null ? 'selected' : ''}`} onClick={() => onSelect(null)} title="Der Stand im Manuskript – noch nicht festgehalten">
         <span className="version-dot" />
         <span className="version-message">Aktueller Stand</span>
         <span className="version-meta">
           {stats ? (
             <>
-              nicht gesichert · <span className="plus">+{stats.added}</span> <span className="minus">−{stats.removed}</span>
+              nicht festgehalten · <span className="plus">+{stats.added}</span> <span className="minus">−{stats.removed}</span>
             </>
           ) : (
-            'alles gesichert'
+            'alles festgehalten'
           )}
         </span>
         <span />
@@ -166,11 +152,11 @@ function VersionList({ versions, selectedId, current, unsaved, latestText, onSel
       {[...versions].reverse().map((v) => (
         <div key={v.id} className={`version-row ${v.id === selectedId ? 'selected' : ''} ${v.auto ? 'auto' : ''}`} onClick={() => onSelect(v.id === selectedId ? null : v.id)}>
           <span className="version-dot" />
-          <span className="version-message">{v.message || '(ohne Nachricht)'}</span>
+          <span className="version-message">{fassungTitle(v)}</span>
           <span className="version-meta">
             {formatWhen(v.createdAt)} · <span className="plus">+{v.added}</span> <span className="minus">−{v.removed}</span>
           </span>
-          <ConfirmDeleteButton label="Version löschen" onDelete={() => onRemove(v.id)} />
+          <ConfirmDeleteButton label="Fassung löschen" onDelete={() => onRemove(v.id)} />
         </div>
       ))}
     </div>

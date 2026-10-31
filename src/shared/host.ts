@@ -38,6 +38,10 @@ export type Settings = {
   /** CSS-Schriftfamilie der Druckfahne; leer = Standard. */
   previewFont: string
   previewFontSize: number
+  /** Nach kurzer Tipppause, beim Wechsel in ein anderes Programm und beim Schließen speichern. */
+  autoSave: boolean
+  /** Alle so viele Minuten eine Fassung festhalten, wenn sich etwas geändert hat; 0 = aus. */
+  autoCommitMinutes: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -48,6 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   editorFontSize: 14,
   previewFont: '',
   previewFontSize: 17,
+  autoSave: true,
+  autoCommitMinutes: 15,
 }
 
 export type ClaudeInfo = { path: string; version: string | null; error?: string }

@@ -50,3 +50,11 @@ Alle Positionen sind UTF-16-Code-Unit-Offsets in den Markdown-Quelltext (wie JS-
 - Eigene Spalte „Versionen“ (links, standardmäßig eingeklappt): oben sichern, darunter ein Zeitstrahl (maßstäblich bis „jetzt“), die Liste (Nachricht, Zeit, +/− Wörter) und für die gewählte Version ein absatzweiser, wortgenauer Vergleich („Seitdem“ bzw. „Diese Version“ gegenüber der vorherigen). Das KI-Panel bleibt bei Kommentaren und Chat, die Druckfahne bei der Druckfahne.
 - „Zurück zu dieser Version“ sichert den jetzigen Stand vorher automatisch (falls noch nicht gesichert) und ändert nur die abweichenden Zeilen – als ein Undo-Schritt; Kommentare in unveränderten Teilen bleiben verankert.
 - Bilder sind nur additiv: Der Bilderordner wird nie aufgeräumt, auch wenn eine neuere Version ein Bild nicht mehr verwendet. So findet jede alte Version ihre Bilder.
+
+## E8 · Speichern und Fassungen
+
+- **Speichern** (⌘S, „Speichern unter …“ ⇧⌘S) schreibt die Datei. Standardmäßig **automatisch**: nach kurzer Tipppause, beim Wechsel in ein anderes Programm und beim Schließen (nur Dokumente mit Dateinamen). Anzeige im Kopf des Manuskripts („Auto gespeichert“ bzw. „● nicht gespeichert“), Klick schaltet um; auch in den Einstellungen.
+- **Festhalten** (⌥⌘S, Menü „Fassung festhalten …“) legt eine **Fassung** an – das, was in git ein Commit wäre. Die Spalte heißt „Fassungen“.
+- Leere Bezeichnung beim Festhalten: Claude benennt die Fassung nach dem inhaltlichen Kern der Änderungen (Wirkung auf Aussage, Ton, Aufbau), nicht nach geänderten Wörtern.
+- **Automatische Fassungen** alle x Minuten (Einstellung, Standard 15, 0 = aus), nur wenn sich seit der letzten Fassung etwas geändert hat – als Protokoll des Schreibfortschritts. Sie erscheinen als hohle Punkte und „Automatisch festgehalten“; bewusst festgehaltene Fassungen sind die bedeutsamen.
+

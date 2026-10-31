@@ -5,6 +5,9 @@ import type { Thread } from '../thread/thread'
 import type { Chat } from '../chat/chats'
 import { contentHash, parseSidecar, restoreThreads, serializeSidecar } from './sidecar'
 
+/** Tipppause, nach der automatisch gespeichert wird. */
+const AUTOSAVE_DELAY_MS = 1500
+
 const fileName = (path: string | null) => (path ? path.split('/').pop()! : 'Unbenannt')
 
 function sameAnchors(a: Anchor[], b: Anchor[]): boolean {
@@ -24,6 +27,8 @@ type Options = {
   anchors: Anchor[]
   threads: Thread[]
   chats: Chat[]
+  /** Automatisch speichern (nur Dokumente mit Dateinamen). */
+  autoSave: boolean
   /** Lädt Text, Anker, Threads und Chats (setzt die Undo-Historie zurück). */
   load: (content: string, anchors: Anchor[], threads: Thread[], chats: Chat[]) => void
 }
@@ -32,12 +37,13 @@ type Options = {
  * Datei-Lebenszyklus des aktuellen Dokuments: Neu, Öffnen, Sichern, Sichern unter,
  * ungesicherte Änderungen. Kommentare werden in der Begleitdatei mitgesichert.
  */
-export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats, load }: Options) {
+export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats, autoSave, load }: Options) {
   const [path, setPath] = useState<string | null>(null)
   const [saved, setSaved] = useState<{ doc: string; anchors: Anchor[]; threads: Thread[]; chats: Chat[] }>({ doc: initialDoc, anchors: [], threads: [], chats: [] })
   /** Begleitdatei war nicht lesbar: beim Sichern nicht überschreiben. */
   const [keepSidecar, setKeepSidecar] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const threadsChanged = threads !== saved.threads && (threads.length > 0 || saved.threads.length > 0)
   // Leere, noch unbenutzte Chats zählen nicht als Änderung.
   const used = (cs: Chat[]) => cs.filter((c) => c.messages.length > 0)
@@ -45,11 +51,21 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats
   const dirty = doc !== saved.doc || threadsChanged || chatChanged || !sameAnchors(anchors, saved.anchors)
   const name = fileName(path)
 
-  /** Sichert; liefert den Pfad oder null, wenn abgebrochen. */
+  /** Speichert; liefert den Pfad oder null, wenn abgebrochen. */
   async function save(asNew = false): Promise<string | null> {
     if (!host) return null
     const target = asNew || !path ? await host.saveDialog(path ? name : 'Unbenannt.md') : path
     if (!target) return null
+    setSaving(true)
+    try {
+      return await write(target)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function write(target: string): Promise<string> {
+    if (!host) throw new Error('Speichern geht nur in der App.')
     const content = doc
     const current = { anchors, threads, chats }
     const sidecar =
@@ -63,7 +79,7 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats
     return target
   }
 
-  /** Fragt bei ungesicherten Änderungen nach; true = weitermachen. */
+  /** Fragt bei ungespeicherten Änderungen nach; true = weitermachen. */
   async function confirmLeave(): Promise<boolean> {
     if (!host || !dirty) return true
     const choice = await host.confirmDiscard(name)
@@ -141,5 +157,19 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chats
     return path ?? (await save())
   }
 
-  return { path, name, dirty, error, ensurePath, showError: setError, clearError: () => setError(null) }
+  // Auto-Speichern: nach kurzer Tipppause und wenn das Fenster den Fokus verliert.
+  const latestSave = useRef(save)
+  latestSave.current = save
+  useEffect(() => {
+    if (!host || !autoSave || !path || !dirty) return
+    const timer = setTimeout(() => run(() => latestSave.current()), AUTOSAVE_DELAY_MS)
+    const onBlur = () => run(() => latestSave.current())
+    window.addEventListener('blur', onBlur)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [host, autoSave, path, dirty, doc, threads, chats, anchors])
+
+  return { path, name, dirty, saving, error, ensurePath, showError: setError, clearError: () => setError(null) }
 }

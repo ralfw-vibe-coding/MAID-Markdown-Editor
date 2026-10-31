@@ -106,6 +106,35 @@ export function SettingsDialog({ host, settings, onChange, onClose }: Props) {
         </section>
 
         <section>
+          <h4>Speichern & Fassungen</h4>
+          <label>
+            <span>Speichern</span>
+            <span className="check-row">
+              <input type="checkbox" checked={settings.autoSave} onChange={(e) => onChange({ autoSave: e.target.checked })} />
+              automatisch nach kurzer Pause
+            </span>
+          </label>
+          <label>
+            <span>Fassungen</span>
+            <span className="check-row">
+              automatisch alle
+              <input
+                type="number"
+                min={0}
+                max={240}
+                value={settings.autoCommitMinutes}
+                onChange={(e) => {
+                  const n = Math.round(Number(e.target.value))
+                  if (n >= 0 && n <= 240) onChange({ autoCommitMinutes: n })
+                }}
+              />
+              Minuten festhalten
+            </span>
+          </label>
+          <p className="hint">Nur wenn sich etwas geändert hat; 0 = aus. Zeigt deinen Schreibfortschritt im Zeitstrahl.</p>
+        </section>
+
+        <section>
           <h4>Schrift</h4>
           <FontRow
             label="Manuskript"

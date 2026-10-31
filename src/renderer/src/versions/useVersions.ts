@@ -25,7 +25,7 @@ export function useVersions(host: MaidHost | null, path: string | null) {
       .then((json) => {
         if (loadedFor.current === path) setVersions(json ? parseVersions(json) : [])
       })
-      .catch((err: Error) => setError(`Versionen konnten nicht gelesen werden: ${err.message}`))
+      .catch((err: Error) => setError(`Fassungen konnten nicht gelesen werden: ${err.message}`))
   }, [host, path])
 
   async function persist(docPath: string, next: Version[]) {

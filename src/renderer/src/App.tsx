@@ -24,6 +24,7 @@ import { markdownKeymap } from './editor/markdownKeymap'
 import { useDocumentFile } from './doc/useDocumentFile'
 import { formatCommands, type FormatCommand } from './editor/format'
 import { FormatToolbar } from './editor/FormatToolbar'
+import { SaveStatus } from './doc/SaveStatus'
 import { useSettings } from './settings/useSettings'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
@@ -282,6 +283,7 @@ export function App() {
     anchors,
     threads,
     chats,
+    autoSave: settings.autoSave,
     load(content, loaded, loadedThreads, loadedChats) {
       const view = viewRef.current!
       view.setState(EditorState.create({ doc: content, extensions }))
@@ -335,15 +337,56 @@ export function App() {
     if (versions.error) file.showError(versions.error)
   }, [versions.error])
 
-  /** Neue Version; Fehler gehen an das Formular der Versionsspalte. */
+  /**
+   * Neue Fassung festhalten. Ohne Bezeichnung formuliert Claude sie aus dem
+   * inhaltlichen Kern der Änderungen. Fehler gehen an das Formular der Spalte.
+   */
   async function saveVersion(message: string) {
     const view = viewRef.current
     if (!host || !view) return
     const docPath = await file.ensurePath()
-    if (!docPath) throw new Error('Für Versionen das Dokument bitte zuerst sichern – sie liegen neben der Datei.')
-    await versions.add(docPath, view.state.doc.toString(), message)
+    if (!docPath) throw new Error('Für Fassungen das Dokument bitte zuerst speichern – sie liegen neben der Datei.')
+    // Den Stand beim Klick festhalten, auch wenn Claude ein paar Sekunden braucht.
+    const text = view.state.doc.toString()
+    let name = message
+    let aiError: string | null = null
+    if (!name) {
+      try {
+        name = await suggestVersionMessage(text)
+      } catch (err) {
+        aiError = (err as Error).message
+      }
+    }
+    await versions.add(docPath, text, name)
     setSelectedVersionId(null)
+    if (aiError) throw new Error(`Festgehalten, aber ohne Bezeichnung – Claude: ${aiError}`)
   }
+
+  // Automatische Fassungen: alle x Minuten, wenn sich seit der letzten Fassung etwas geändert hat –
+  // ein Protokoll des Schreibfortschritts. Gezählt wird ab der letzten Fassung bzw. ab dem Öffnen.
+  const versionsRef = useRef(versions)
+  versionsRef.current = versions
+  const openedAt = useRef(Date.now())
+  useEffect(() => {
+    openedAt.current = Date.now()
+  }, [file.path])
+  useEffect(() => {
+    const minutes = settings.autoCommitMinutes
+    const path = file.path
+    if (!host || !path || !(minutes > 0)) return
+    const tick = () => {
+      const view = viewRef.current
+      if (!view) return
+      const list = versionsRef.current.versions
+      const latest = list.at(-1)
+      const since = Math.max(openedAt.current, latest ? Date.parse(latest.createdAt) : 0)
+      const text = view.state.doc.toString()
+      if (Date.now() - since < minutes * 60_000 || text === latest?.text || text.trim() === '') return
+      void versionsRef.current.add(path, text, '', true).catch((err: Error) => file.showError(`Automatisches Festhalten fehlgeschlagen: ${err.message}`))
+    }
+    const id = setInterval(tick, 30_000)
+    return () => clearInterval(id)
+  }, [host, file.path, settings.autoCommitMinutes])
 
   /** ⌥⌘S: Versionsspalte aufklappen und ins Nachrichtenfeld. */
   function openVersions() {
@@ -358,10 +401,9 @@ export function App() {
   const openVersionsRef = useRef(openVersions)
   openVersionsRef.current = openVersions
 
-  async function suggestVersionMessage(): Promise<string> {
-    const view = viewRef.current
-    if (!host || !view) throw new Error('Nur in der App verfügbar.')
-    const prompt = buildVersionMessagePrompt(versions.versions.at(-1)?.text ?? '', view.state.doc.toString())
+  async function suggestVersionMessage(text: string): Promise<string> {
+    if (!host) throw new Error('Nur in der App verfügbar.')
+    const prompt = buildVersionMessagePrompt(versions.versions.at(-1)?.text ?? '', text)
     const result = await host.askAi({ prompt, systemPrompt: VERSION_MESSAGE_SYSTEM, schema: VERSION_MESSAGE_SCHEMA })
     if (!result.ok) throw new Error(result.error)
     return String((result.data as { message?: unknown }).message ?? '')
@@ -377,7 +419,7 @@ export function App() {
     if (!host || !view || !target || !file.path) return
     const current = view.state.doc.toString()
     try {
-      if (versions.versions.at(-1)?.text !== current) await versions.add(file.path, current, `Vor Rückkehr zu „${target.message}“`, true)
+      if (versions.versions.at(-1)?.text !== current) await versions.add(file.path, current, `Vor Rückkehr zu „${target.message || 'Fassung'}“`, true)
       view.dispatch({ changes: lineChanges(current, target.text), userEvent: 'input.restore', scrollIntoView: true })
       setSelectedVersionId(null)
     } catch (err) {
@@ -390,7 +432,7 @@ export function App() {
     if (!host || !view) return file.showError('Bilder einfügen geht nur in der App.')
     try {
       const docPath = await file.ensurePath()
-      if (!docPath) return file.showError('Zum Einfügen von Bildern das Dokument bitte zuerst sichern – die Bilder liegen neben der Datei.')
+      if (!docPath) return file.showError('Zum Einfügen von Bildern das Dokument bitte zuerst speichern – die Bilder liegen neben der Datei.')
       const refs: string[] = []
       for (const f of files) refs.push(imageMarkdown(await host.saveImage(docPath, new Uint8Array(await f.arrayBuffer()), imageExtension(f)!)))
       const insert = refs.join('\n\n')
@@ -789,9 +831,9 @@ export function App() {
       >
         {/* Weggeklappte Spalten bleiben im DOM, damit Editor, Entwürfe und Verlauf erhalten bleiben. */}
         <section className={`pane versions-column ${collapsed.versions ? 'collapsed' : ''}`}>
-          {collapsed.versions && <CollapsedStrip title="Versionen" onExpand={() => togglePane('versions')} />}
+          {collapsed.versions && <CollapsedStrip title="Fassungen" onExpand={() => togglePane('versions')} />}
           <h2>
-            Versionen
+            Fassungen
             <CollapseButton disabled={cannotCollapse(collapsed, 'versions')} onClick={() => togglePane('versions')} />
           </h2>
           <VersionsPane
@@ -801,7 +843,7 @@ export function App() {
             available={!!host}
             focusToken={versionFocus}
             onSave={saveVersion}
-            onSuggest={host ? suggestVersionMessage : undefined}
+            aiAvailable={!!host}
             onSelect={setSelectedVersionId}
             onRestore={(id) => void restoreVersion(id)}
             onRemove={(id) => {
@@ -815,6 +857,15 @@ export function App() {
           {collapsed.editor && <CollapsedStrip title="Manuskript" onExpand={() => togglePane('editor')} />}
           <h2>
             Manuskript
+            {host && (
+              <SaveStatus
+                autoSave={settings.autoSave}
+                hasPath={!!file.path}
+                dirty={file.dirty}
+                saving={file.saving}
+                onToggle={() => void updateSettings({ autoSave: !settings.autoSave })}
+              />
+            )}
             <FormatToolbar onFormat={applyFormat} />
             <CollapseButton disabled={cannotCollapse(collapsed, 'editor')} onClick={() => togglePane('editor')} />
           </h2>
