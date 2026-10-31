@@ -2,18 +2,21 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SquarePen } from 'lucide-react'
 import { buildPreview } from '../render/buildPreview'
 import { Preview } from '../render/Preview'
-import type { Message } from '../thread/thread'
+import { occursOnce, type Message } from '../thread/thread'
+import { MessageView } from '../thread/ThreadPanel'
 
 type Props = {
+  doc: string
   messages: Message[]
   busy: boolean
   aiAvailable: boolean
   onSend: (text: string) => void
+  onRevert: (messageId: string) => void
   onReset: () => void
 }
 
 /** Freier Chat mit Claude über das ganze Dokument. */
-export function ChatPanel({ messages, busy, aiAvailable, onSend, onReset }: Props) {
+export function ChatPanel({ doc, messages, busy, aiAvailable, onSend, onRevert, onReset }: Props) {
   const [draft, setDraft] = useState('')
   const scroller = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
@@ -24,6 +27,8 @@ export function ChatPanel({ messages, busy, aiAvailable, onSend, onReset }: Prop
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length, busy])
 
+  const lastEdit = messages.findLast((m) => m.kind === 'edit')
+
   const send = () => {
     if (!draft.trim() || busy || !aiAvailable) return
     onSend(draft.trim())
@@ -33,7 +38,7 @@ export function ChatPanel({ messages, busy, aiAvailable, onSend, onReset }: Prop
   return (
     <div className="chat global-chat">
       <div className="chat-head">
-        <span className="muted">Claude kennt das ganze Dokument und deine Cursorposition.</span>
+        <span className="muted">Claude kennt das ganze Dokument und deine Markierung; ändert auf ausdrücklichen Auftrag.</span>
         <span className="chat-tools">
           <button
             className="icon"
@@ -67,7 +72,17 @@ export function ChatPanel({ messages, busy, aiAvailable, onSend, onReset }: Prop
             <div key={m.id} className="msg msg-error">
               {m.text}
             </div>
-          ) : null,
+          ) : (
+            <MessageView
+              key={m.id}
+              m={m}
+              showWhere={false}
+              // Zurücknehmen geht, solange der eingesetzte Text eindeutig im Dokument steht.
+              canRevert={m === lastEdit && !m.reverted && occursOnce(doc, m.after) && !busy}
+              editedSince={m === lastEdit && !m.reverted && !occursOnce(doc, m.after)}
+              onRevert={() => onRevert(m.id)}
+            />
+          ),
         )}
         {busy && <div className="msg msg-ai thinking">Claude denkt …</div>}
       </div>

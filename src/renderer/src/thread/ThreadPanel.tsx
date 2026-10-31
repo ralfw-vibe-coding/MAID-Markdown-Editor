@@ -167,7 +167,9 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
   )
 }
 
-function MessageView({ m, canRevert, editedSince, onRevert }: { m: Message; canRevert: boolean; editedSince: boolean; onRevert: () => void }) {
+/** Eine Nachricht im Verlauf; Änderungen als Diff-Karte mit „Zurücknehmen“. */
+export function MessageView(props: { m: Message; canRevert: boolean; editedSince: boolean; onRevert: () => void; showWhere?: boolean }) {
+  const { m, canRevert, editedSince, onRevert, showWhere = true } = props
   switch (m.kind) {
     case 'user':
       return <div className="msg msg-user">{m.text}</div>
@@ -181,7 +183,7 @@ function MessageView({ m, canRevert, editedSince, onRevert }: { m: Message; canR
           <div className="edit-head">
             <span>
               {m.reverted ? 'Änderung zurückgenommen' : editedSince ? 'Änderung ausgeführt · Stelle seitdem bearbeitet' : 'Änderung ausgeführt'}
-              {m.elsewhere && ' · an anderer Stelle'}
+              {m.elsewhere && showWhere && ' · an anderer Stelle'}
             </span>
             {canRevert && (
               <button className="link" onClick={onRevert}>

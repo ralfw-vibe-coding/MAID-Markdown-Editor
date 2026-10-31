@@ -36,30 +36,33 @@ export function updateThread(threads: Thread[], id: string, f: (t: Thread) => Th
 export const occursOnce = (doc: string, needle: string) => needle !== '' && doc.indexOf(needle) >= 0 && doc.indexOf(needle) === doc.lastIndexOf(needle)
 
 /**
- * Gleicht den Status der jeweils letzten Änderung eines Threads mit dem Text
- * ab: Steht wieder der alte Text da (⌘Z, „Zurücknehmen“), gilt sie als
- * zurückgenommen, steht dort der neue (Redo), als ausgeführt. Änderungen an
- * der kommentierten Stelle werden am Anker geprüft, Änderungen an anderer
- * Stelle im ganzen Dokument. Liefert dieselbe Liste zurück, wenn sich nichts ändert.
+ * Gleicht den Status der letzten Änderung in einem Verlauf mit dem Text ab:
+ * Steht wieder der alte Text da (⌘Z, „Zurücknehmen“), gilt sie als
+ * zurückgenommen, steht der neue da (Redo), als ausgeführt. Änderungen an
+ * der kommentierten Stelle werden am Anker geprüft (`anchoredText`),
+ * Änderungen an anderer Stelle im ganzen Dokument. Liefert denselben Verlauf
+ * zurück, wenn sich nichts ändert.
  */
+export function syncLastEdit(messages: Message[], anchoredText: string | null, doc: string): Message[] {
+  const idx = messages.findLastIndex((m) => m.kind === 'edit')
+  const m = messages[idx]
+  if (!m || m.kind !== 'edit') return messages
+  let reverted = m.reverted
+  if (m.elsewhere) reverted = occursOnce(doc, m.after) ? false : doc.includes(m.before) ? true : m.reverted
+  else if (anchoredText !== null) reverted = anchoredText === m.before ? true : anchoredText === m.after ? false : m.reverted
+  if (reverted === m.reverted) return messages
+  const next = [...messages]
+  next[idx] = { ...m, reverted }
+  return next
+}
+
+/** `syncLastEdit` für alle Threads; liefert dieselbe Liste, wenn sich nichts ändert. */
 export function syncEditStates(threads: Thread[], anchoredText: (id: string) => string | null, doc: string): Thread[] {
   let changed = false
   const next = threads.map((t) => {
-    const idx = t.messages.findLastIndex((m) => m.kind === 'edit')
-    const m = t.messages[idx]
-    if (!m || m.kind !== 'edit') return t
-    let reverted = m.reverted
-    if (m.elsewhere) {
-      reverted = occursOnce(doc, m.after) ? false : doc.includes(m.before) ? true : m.reverted
-    } else {
-      const text = anchoredText(t.id)
-      if (text === null) return t
-      reverted = text === m.before ? true : text === m.after ? false : m.reverted
-    }
-    if (reverted === m.reverted) return t
+    const messages = syncLastEdit(t.messages, anchoredText(t.id), doc)
+    if (messages === t.messages) return t
     changed = true
-    const messages = [...t.messages]
-    messages[idx] = { ...m, reverted }
     return { ...t, messages }
   })
   return changed ? next : threads

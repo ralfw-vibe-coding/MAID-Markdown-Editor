@@ -19,8 +19,22 @@ describe('Prompt für den freien Chat', () => {
     expect(p).toContain('<markierung>\nErster Absatz.\n</markierung>')
   })
 
+  it('Verlauf enthält ausgeführte und zurückgenommene Änderungen', () => {
+    const p = buildChatPrompt({
+      doc,
+      focus: null,
+      messages: [message({ kind: 'edit', before: 'alt', after: 'neu' }), message({ kind: 'edit', before: 'a', after: 'b', reverted: true })],
+    })
+    expect(p).toContain('[Änderung ausgeführt: „alt“ → „neu“]')
+    expect(p).toContain('[Änderung wurde wieder zurückgenommen: „a“ → „b“]')
+  })
+
   it('lehnt Antworten ohne Text ab', () => {
     expect(() => parseChatAnswer({})).toThrow()
-    expect(parseChatAnswer({ reply: '**ok**' })).toBe('**ok**')
+    expect(parseChatAnswer({ reply: '**ok**', edit: false, oldText: '', newText: '' })).toEqual({ reply: '**ok**', edit: null })
+    expect(parseChatAnswer({ reply: 'gekürzt', edit: true, oldText: 'Erster Absatz.', newText: 'Erstes.' }).edit).toEqual({
+      oldText: 'Erster Absatz.',
+      newText: 'Erstes.',
+    })
   })
 })

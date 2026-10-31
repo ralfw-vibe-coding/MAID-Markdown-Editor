@@ -24,7 +24,7 @@ import { useDocumentFile } from './doc/useDocumentFile'
 import { useSettings } from './settings/useSettings'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
-import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer } from './chat/chat'
+import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer, type EditorFocus } from './chat/chat'
 import { MessageSquareText, MessagesSquare } from 'lucide-react'
 import {
   COLLAPSED_WIDTH,
@@ -37,7 +37,7 @@ import {
   toggleCollapsed,
   type PaneId,
 } from './layout/panes'
-import { appendMessage, createThread, message, syncEditStates, updateThread, type Message, type Thread } from './thread/thread'
+import { appendMessage, createThread, message, syncEditStates, syncLastEdit, updateThread, type Message, type Thread } from './thread/thread'
 import { ThreadPanel } from './thread/ThreadPanel'
 import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
 import { minimalChange, planEdit } from './ai/planEdit'
@@ -83,6 +83,8 @@ export function App() {
   const editorHost = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
+  /** Markierung bzw. Cursor zum Zeitpunkt einer Chat-Nachricht; wird bei Änderungen mitgeführt. */
+  const chatFocusRef = useRef<EditorFocus | null>(null)
   const [doc, setDoc] = useState(initialDoc)
   const [anchors, setAnchors] = useState<Anchor[]>([])
   const [threads, setThreads] = useState<Thread[]>([])
@@ -127,6 +129,7 @@ export function App() {
         return a && isPlaced(a) ? doc.slice(a.from, a.to) : null
       }, doc),
     )
+    setChat((c) => syncLastEdit(c, null, doc))
   }, [anchors, doc])
 
   // Laufende KI-Anfragen brauchen den aktuellen Stand, nicht den ihres Starts.
@@ -145,6 +148,11 @@ export function App() {
       host ? [] : keymap.of([{ key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) }]),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) setDoc(u.state.doc.toString())
+        const f = chatFocusRef.current
+        if (u.docChanged && f) {
+          const from = u.changes.mapPos(f.from, f.from === f.to ? -1 : 1)
+          chatFocusRef.current = { from, to: f.from === f.to ? from : Math.max(from, u.changes.mapPos(f.to, -1)) }
+        }
         const next = u.state.field(anchorField)
         if (next !== u.startState.field(anchorField)) setAnchors(next)
       }),
@@ -395,15 +403,57 @@ export function App() {
     setChatBusy(true)
     try {
       const { from, to } = view.state.selection.main
+      chatFocusRef.current = { from, to }
       const prompt = buildChatPrompt({ doc: view.state.doc.toString(), focus: { from, to }, messages })
       const result = await host.askAi({ prompt, systemPrompt: CHAT_SYSTEM_PROMPT, schema: CHAT_SCHEMA })
-      const answer = result.ok ? message({ kind: 'ai', text: parseChatAnswer(result.data) }) : message({ kind: 'error', text: result.error })
-      setChat((c) => [...c, answer])
+      if (!result.ok) return setChat((c) => [...c, message({ kind: 'error', text: result.error })])
+      const answer = parseChatAnswer(result.data)
+      setChat((c) => [...c, message({ kind: 'ai', text: answer.reply })])
+      if (answer.edit) {
+        const { oldText, newText } = answer.edit
+        const done = applyChatEdit(oldText, newText, chatFocusRef.current)
+        // Chat-Änderungen sind an keinen Anker gebunden; ihr Status wird im ganzen Dokument geprüft.
+        const note =
+          'error' in done
+            ? message({ kind: 'error', text: `Nicht ausgeführt: ${done.error}` })
+            : message({ kind: 'edit', before: done.before, after: newText, elsewhere: true })
+        setChat((c) => [...c, note])
+      }
     } catch (err) {
       setChat((c) => [...c, message({ kind: 'error', text: (err as Error).message })])
     } finally {
+      chatFocusRef.current = null
       setChatBusy(false)
     }
+  }
+
+  /**
+   * Führt eine Chat-Änderung aus: an der Markierung bzw. Cursorposition, sonst an
+   * einer eindeutigen Textstelle. Die geänderte Stelle wird im Manuskript markiert.
+   */
+  function applyChatEdit(oldText: string, newText: string, focus: EditorFocus | null): { before: string } | { error: string } {
+    const view = viewRef.current
+    if (!view) return { error: 'Kein Editor.' }
+    const text = view.state.doc.toString()
+    const target = focus ? { ...focus, point: focus.from === focus.to } : { from: 0, to: 0 }
+    const plan = planEdit(text, target, oldText, newText)
+    if ('error' in plan) return plan
+    const change = minimalChange(text, plan)
+    view.dispatch({
+      changes: { from: change.from, to: change.to, insert: change.insert },
+      selection: { anchor: plan.from, head: plan.from + newText.length },
+      scrollIntoView: true,
+      userEvent: 'input.maid',
+    })
+    return { before: text.slice(plan.from, plan.to) }
+  }
+
+  function revertChatEdit(messageId: string) {
+    const m = chat.find((x) => x.id === messageId)
+    if (!m || m.kind !== 'edit') return
+    const done = applyChatEdit(m.after, m.before, null)
+    if ('error' in done) return setChat((c) => [...c, message({ kind: 'error', text: `Nicht zurückgenommen: ${done.error}` })])
+    setChat((c) => c.map((x) => (x.id === messageId ? { ...x, reverted: true } : x)))
   }
 
   function focusThread(id: string) {
@@ -498,7 +548,15 @@ export function App() {
             <CollapseButton toward="right" disabled={isLastOpen(collapsed, 'side')} onClick={() => togglePane('side')} />
           </div>
           {panel === 'chat' ? (
-            <ChatPanel messages={chat} busy={chatBusy} aiAvailable={!!host} onSend={(t) => void askChat(t)} onReset={() => setChat([])} />
+            <ChatPanel
+              doc={doc}
+              messages={chat}
+              busy={chatBusy}
+              aiAvailable={!!host}
+              onSend={(t) => void askChat(t)}
+              onRevert={revertChatEdit}
+              onReset={() => setChat([])}
+            />
           ) : (
             <ThreadPanel
               doc={doc}
