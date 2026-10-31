@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Trash2, X } from 'lucide-react'
 import type { Anchor } from '../anchor/anchors'
 import { diffWords } from './diffWords'
-import type { Message, Thread } from './thread'
+import { occursOnce, type Message, type Thread } from './thread'
 
 type Props = {
   doc: string
@@ -120,7 +120,9 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
         {thread.messages.map((m) => {
           // Zurücknehmen geht nur, solange genau der eingesetzte Text an der Stelle steht.
           const current = m === lastEdit && m.kind === 'edit' && !m.reverted
-          const intact = current && (anchor.from < anchor.to || !!anchor.point) && doc.slice(anchor.from, anchor.to) === m.after
+          const intact =
+            current &&
+            (m.elsewhere ? occursOnce(doc, m.after) : (anchor.from < anchor.to || !!anchor.point) && doc.slice(anchor.from, anchor.to) === m.after)
           return (
             <MessageView
               key={m.id}
@@ -178,6 +180,7 @@ function MessageView({ m, canRevert, editedSince, onRevert }: { m: Message; canR
           <div className="edit-head">
             <span>
               {m.reverted ? 'Änderung zurückgenommen' : editedSince ? 'Änderung ausgeführt · Stelle seitdem bearbeitet' : 'Änderung ausgeführt'}
+              {m.elsewhere && ' · an anderer Stelle'}
             </span>
             {canRevert && (
               <button className="link" onClick={onRevert}>

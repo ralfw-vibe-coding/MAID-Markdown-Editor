@@ -102,9 +102,9 @@ describe('Einfügemarke', () => {
     expect(planEdit(doc, end, '', ' Neu.')).toEqual({ from: doc.length, to: doc.length, insert: ' Neu.' })
   })
 
-  it('oldText muss an die Marke grenzen', () => {
-    expect(planEdit(doc, end, 'Letzter Satz.', 'Schlusssatz.')).toMatchObject({ insert: 'Schlusssatz.' })
-    expect(planEdit(doc, end, 'Erster Satz.', 'x')).toHaveProperty('error')
+  it('oldText an der Marke gilt als Änderung an der Stelle, sonst als „an anderer Stelle“', () => {
+    expect(planEdit(doc, end, 'Letzter Satz.', 'Schlusssatz.')).toEqual({ from: 13, to: 26, insert: 'Schlusssatz.' })
+    expect(planEdit(doc, end, 'Erster Satz.', 'x')).toMatchObject({ from: 0, elsewhere: true })
   })
 
   it('Leerraum zwischen Ausschnitt und Marke ist erlaubt (Marke hinter dem letzten Zeilenumbruch)', () => {
@@ -112,5 +112,32 @@ describe('Einfügemarke', () => {
     const p = { from: d.length, to: d.length, point: true }
     expect(planEdit(d, p, 'Erster Satz.', 'Erster Satz. Zweiter Satz.')).toEqual({ from: 0, to: 12, insert: 'Erster Satz. Zweiter Satz.' })
     expect(planEdit('A.\n\nB.', { from: 3, to: 3, point: true }, 'B.', 'x')).toMatchObject({ from: 4 })
+  })
+})
+
+describe('Änderung an anderer Stelle', () => {
+  const doc = '## 1. Leitidee\n\n**MAID ist ein Editor.**\n\n## 2. Prinzipien\n\n1. Markdown ist maßgeblich.'
+  const anchor = { from: doc.indexOf('Markdown'), to: doc.indexOf('Markdown') + 8 }
+
+  it('eindeutiger Text woanders: wird dort geändert und als „elsewhere“ markiert', () => {
+    const plan = planEdit(doc, anchor, '**MAID ist ein Editor.**', '**MAID ist ein Editor.** Markdown ist Klartext mit Zeichen.')
+    expect(plan).toMatchObject({ from: doc.indexOf('**MAID'), elsewhere: true })
+  })
+
+  it('Text an der Stelle hat Vorrang vor gleichem Text woanders', () => {
+    const d = 'Markdown hier. Und Markdown dort.'
+    const plan = planEdit(d, { from: 19, to: 27 }, 'Markdown', 'MD')
+    expect(plan).toEqual({ from: 19, to: 27, insert: 'MD' })
+  })
+
+  it('mehrdeutiger Text woanders: verweigert mit Anzahl', () => {
+    const d = 'Ein Wort. Ein Wort. Kommentiert.'
+    const r = planEdit(d, { from: d.indexOf('Kommentiert'), to: d.length - 1 }, 'Ein Wort.', 'x')
+    expect(r).toHaveProperty('error')
+    expect((r as { error: string }).error).toContain('2-mal')
+  })
+
+  it('Text gar nicht vorhanden: eigene Meldung', () => {
+    expect((planEdit(doc, anchor, 'gibt es nicht', 'x') as { error: string }).error).toContain('kommt im Dokument nicht vor')
   })
 })

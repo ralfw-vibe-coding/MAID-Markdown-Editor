@@ -96,7 +96,7 @@ export function App() {
       syncEditStates(ts, (id) => {
         const a = anchors.find((x) => x.id === id)
         return a && isPlaced(a) ? doc.slice(a.from, a.to) : null
-      }),
+      }, doc),
     )
   }, [anchors, doc])
 
@@ -124,7 +124,15 @@ export function App() {
   )
 
   useEffect(() => {
-    const view = new EditorView({ parent: editorHost.current!, doc: initialDoc, extensions })
+    // Wird der Editor neu aufgebaut (z. B. beim Hot Reload in der Entwicklung),
+    // übernimmt er Text, Auswahl und Anker vom vorherigen statt leer anzufangen.
+    const previous = viewRef.current?.state
+    const view = new EditorView({
+      parent: editorHost.current!,
+      state: EditorState.create({ doc: previous?.doc ?? initialDoc, selection: previous?.selection, extensions }),
+    })
+    const anchorsBefore = previous?.field(anchorField, false)
+    if (anchorsBefore?.length) view.dispatch({ effects: setAnchorsEffect.of(anchorsBefore) })
     viewRef.current = view
     return () => view.destroy()
   }, [extensions])
@@ -206,7 +214,7 @@ export function App() {
    * Editor-Transaktion (ein Undo-Schritt). Der Anker wird explizit auf den
    * Ersatztext gesetzt. Liefert den ersetzten Text oder eine Fehlermeldung.
    */
-  function replaceAtAnchor(id: string, oldText: string, newText: string): { before: string } | { error: string } {
+  function replaceAtAnchor(id: string, oldText: string, newText: string): { before: string; elsewhere: boolean } | { error: string } {
     const view = viewRef.current
     const anchor = currentAnchor(id)
     if (!view || !anchor) return { error: 'Der Thread hat keine Stelle mehr im Dokument.' }
@@ -214,13 +222,24 @@ export function App() {
     const plan = planEdit(text, anchor, oldText, newText)
     if ('error' in plan) return plan
     const change = minimalChange(text, plan)
-    view.dispatch({
-      changes: { from: change.from, to: change.to, insert: change.insert },
-      // Wird der Text ganz entfernt (z. B. Rücknahme einer Einfügung), bleibt eine Einfügemarke.
-      effects: placeAnchor.of({ id, from: plan.from, to: plan.from + newText.length, point: newText === '', quote: newText, status: 'ok' }),
-      userEvent: 'input.maid',
-    })
-    return { before: text.slice(plan.from, plan.to) }
+    const changes = { from: change.from, to: change.to, insert: change.insert }
+    if (plan.elsewhere) {
+      // Änderung an anderer Stelle: Anker bleibt, die Stelle wird im Manuskript gezeigt.
+      view.dispatch({
+        changes,
+        selection: { anchor: plan.from, head: plan.from + newText.length },
+        scrollIntoView: true,
+        userEvent: 'input.maid',
+      })
+    } else {
+      view.dispatch({
+        changes,
+        // Wird der Text ganz entfernt (z. B. Rücknahme einer Einfügung), bleibt eine Einfügemarke.
+        effects: placeAnchor.of({ id, from: plan.from, to: plan.from + newText.length, point: newText === '', quote: newText, status: 'ok' }),
+        userEvent: 'input.maid',
+      })
+    }
+    return { before: text.slice(plan.from, plan.to), elsewhere: !!plan.elsewhere }
   }
 
   async function askAi(id: string, mode: AskMode) {
@@ -245,7 +264,12 @@ export function App() {
       appendTo(id, { kind: 'ai', text: answer.reply })
       if (answer.edit) {
         const done = replaceAtAnchor(id, answer.edit.oldText, answer.edit.newText)
-        appendTo(id, 'error' in done ? { kind: 'error', text: done.error } : { kind: 'edit', before: done.before, after: answer.edit.newText })
+        appendTo(
+          id,
+          'error' in done
+            ? { kind: 'error', text: `Nicht ausgeführt: ${done.error}` }
+            : { kind: 'edit', before: done.before, after: answer.edit.newText, elsewhere: done.elsewhere },
+        )
       }
     } catch (err) {
       appendTo(id, { kind: 'error', text: (err as Error).message })

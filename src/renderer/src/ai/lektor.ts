@@ -20,7 +20,8 @@ Regeln:
 - Antworte in der Sprache des Autors, knapp und konkret (meist 1–4 Sätze). Formulierungsvorschläge setzt du in Anführungszeichen.
 - Du änderst das Dokument nur, wenn der Autor es ausdrücklich verlangt (siehe Auftrag). Sonst ist "edit" false und "oldText"/"newText" sind leer.
 - Wenn du änderst ("edit": true):
-  - "oldText" ist ein exakter, zusammenhängender Ausschnitt aus dem Markdown-Quelltext – ohne die Markierungszeichen ${MARK_START} ${MARK_END}. Er enthält die markierte Stelle oder überlappt sie. Halte ihn so kurz wie möglich: in der Regel genau die markierte Stelle, bei Bedarf bis zum ganzen Satz erweitert.
+  - "oldText" ist ein exakter, zusammenhängender Ausschnitt aus dem Markdown-Quelltext – ohne die Markierungszeichen ${MARK_START} ${MARK_END}. Normalerweise enthält er die markierte Stelle oder überlappt sie. Halte ihn so kurz wie möglich: in der Regel genau die markierte Stelle, bei Bedarf bis zum ganzen Satz erweitert.
+  - Wurde besprochen, dass die Änderung an eine andere Stelle des Dokuments gehört, darf "oldText" dort liegen – dann muss er aber im ganzen Dokument genau einmal vorkommen (lieber einen ganzen Satz als ein einzelnes Wort). Zum Einfügen: "oldText" ist der Text direkt vor der Einfügestelle, "newText" derselbe Text plus das Neue.
   - "newText" ersetzt "oldText" vollständig. Ändere nichts, was nicht besprochen wurde.
   - An einer Einfügemarke: "oldText" leer lassen, um "newText" genau dort einzufügen (achte auf passende Leerzeichen und Leerzeilen am Anfang/Ende von "newText"), oder einen kurzen Ausschnitt angeben, der direkt an die Marke grenzt.
   - Markdown-Auszeichnungen (**, *, [](), \`) müssen in "newText" vollständig und ausgeglichen sein.
@@ -48,9 +49,7 @@ function transcript(messages: Message[]): string {
         case 'ai':
           return `Lektor (du): ${m.text}`
         case 'edit':
-          return m.reverted
-            ? `[Änderung wurde wieder zurückgenommen: „${m.before}“ → „${m.after}“]`
-            : `[Änderung ausgeführt: „${m.before}“ → „${m.after}“]`
+          return `[Änderung ${m.reverted ? 'wurde wieder zurückgenommen' : 'ausgeführt'}${m.elsewhere ? ' (an anderer Stelle)' : ''}: „${m.before}“ → „${m.after}“]`
         case 'error':
           return `[Hinweis: ${m.text}]`
       }
