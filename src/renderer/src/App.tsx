@@ -24,7 +24,7 @@ import { markdownKeymap } from './editor/markdownKeymap'
 import { useDocumentFile } from './doc/useDocumentFile'
 import { formatCommands, type FormatCommand } from './editor/format'
 import { FormatToolbar } from './editor/FormatToolbar'
-import { SaveStatus } from './doc/SaveStatus'
+import { AUTO_COMMIT_DEFAULT, SaveStatus } from './doc/SaveStatus'
 import { useSettings } from './settings/useSettings'
 import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
@@ -859,11 +859,14 @@ export function App() {
             Manuskript
             {host && (
               <SaveStatus
-                autoSave={settings.autoSave}
                 hasPath={!!file.path}
+                autoSave={settings.autoSave}
                 dirty={file.dirty}
                 saving={file.saving}
-                onToggle={() => void updateSettings({ autoSave: !settings.autoSave })}
+                onToggleSave={() => void updateSettings({ autoSave: !settings.autoSave })}
+                autoCommitMinutes={settings.autoCommitMinutes}
+                unfixed={doc.trim() !== '' && versions.versions.at(-1)?.text !== doc}
+                onToggleCommit={() => void updateSettings({ autoCommitMinutes: settings.autoCommitMinutes > 0 ? 0 : AUTO_COMMIT_DEFAULT })}
               />
             )}
             <FormatToolbar onFormat={applyFormat} />
