@@ -1,0 +1,41 @@
+# Eigenständige MAID.app für /Applications – `npm run install-app` baut und installiert sie.
+appId: local.maid
+productName: MAID
+directories:
+  output: dist
+# electron-vite bündelt alles nach out/; Laufzeit-Module aus node_modules braucht die App nicht.
+files:
+  - out/**
+  - package.json
+  - '!node_modules/**'
+mac:
+  target: dir
+  # Icon-Composer-Format (macOS 26): ein .icns setzt macOS in eine graue Kachel. Braucht Xcode 26+.
+  icon: resources/MAID.icon
+  category: public.app-category.productivity
+  # Ohne Developer-ID ad hoc signieren – reicht für den eigenen Mac.
+  identity: '-'
+  # Hardened Runtime ist nur für Notarisierung nötig und blockiert ad hoc signierte Frameworks.
+  hardenedRuntime: false
+  extendInfo:
+    # Markdown ist bei macOS bekannt (net.daringfireball.markdown); MAID ist dafür ein Editor.
+    CFBundleDocumentTypes:
+      - CFBundleTypeName: Markdown
+        CFBundleTypeRole: Editor
+        LSHandlerRank: Default
+        LSItemContentTypes:
+          - net.daringfireball.markdown
+        CFBundleTypeExtensions:
+          - md
+          - markdown
+    UTImportedTypeDeclarations:
+      - UTTypeIdentifier: net.daringfireball.markdown
+        UTTypeDescription: Markdown
+        UTTypeConformsTo:
+          - public.plain-text
+        UTTypeTagSpecification:
+          public.filename-extension:
+            - md
+            - markdown
+          public.mime-type:
+            - text/markdown

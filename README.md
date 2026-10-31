@@ -112,6 +112,16 @@ npm run app -- -- "/Pfad/zu/Text.md"
 
 `npm install` legt neben dem Electron-Programm ein eigenes Bundle `MAID.app` an (Name, Icon, Bundle-ID), damit Dock und ⌘-Tab „MAID“ zeigen.
 
+### Als App installieren
+
+```bash
+npm run install-app
+```
+
+baut eine eigenständige `MAID.app` (electron-builder, ad hoc signiert), legt sie nach `/Applications` und macht sie zum Standardprogramm für `.md` und `.markdown` – ein Doppelklick im Finder öffnet die Datei dann in MAID. Eine laufende installierte MAID wird dafür vorher beendet (sie speichert dabei). Nur bauen, ohne zu installieren: `npm run dist` (Ergebnis in `dist/`). Dafür ist **Xcode 26** oder neuer nötig: Das App-Icon liegt im Icon-Composer-Format vor (`resources/MAID.icon`), damit macOS 26 es nicht in eine graue Kachel setzt.
+
+Entwicklungsversion (`npm run app`) und installierte App teilen sich die Einstellungen; die Anordnung der Spalten merkt sich jede für sich.
+
 ## Entwicklung
 
 | Befehl | |
@@ -120,6 +130,7 @@ npm run app -- -- "/Pfad/zu/Text.md"
 | `npm test` | Tests (Vitest) |
 | `npm run typecheck` | TypeScript prüfen |
 | `npm run web` | nur die Oberfläche im Browser, ohne Dateizugriff und KI |
+| `npm run install-app` | App bauen, nach `/Applications` installieren, Standard für Markdown |
 
 Aufbau:
 
@@ -134,4 +145,4 @@ Aufbau:
 
 ## Stand
 
-MAID ist ein persönliches Werkzeug in aktiver Entwicklung, entstanden im Vibe Coding mit Claude. Es läuft bisher als Entwicklungsversion; ein fertiges App-Paket mit Dateizuordnung im Finder steht im [Backlog](requirements/Backlog.md).
+MAID ist ein persönliches Werkzeug in aktiver Entwicklung, entstanden im Vibe Coding mit Claude. Offene Punkte stehen im [Backlog](requirements/Backlog.md).

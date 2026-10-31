@@ -337,8 +337,9 @@ app.on('open-file', (e, path) => {
 })
 
 app.whenReady().then(() => {
-  // Das Bundle-Icon steckt in MAID.app; das Dock cached Icons aber hartnäckig.
-  if (!app.isPackaged) app.dock?.setIcon(join(import.meta.dirname, '../../resources/icon.png'))
+  // Die Entwicklungs-MAID.app hat nur ein .icns, das macOS 26 in eine graue Kachel setzt;
+  // icon-dock.png ist das Icon so, wie es die installierte App (Icon-Composer-Format) zeigt.
+  if (!app.isPackaged) app.dock?.setIcon(join(import.meta.dirname, '../../resources/icon-dock.png'))
   // Dateien von der Kommandozeile, z. B. `npm run app -- -- text.md`
   for (const arg of process.argv.slice(app.isPackaged ? 1 : 2)) {
     if (/\.(md|markdown|txt)$/i.test(arg)) startupPaths.push(arg)
