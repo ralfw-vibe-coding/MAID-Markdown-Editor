@@ -7,7 +7,7 @@ export type OpenedFile = {
   sidecar: string | null
 }
 
-export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'settings'
+export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings'
 
 export type DiscardChoice = 'save' | 'discard' | 'cancel'
 

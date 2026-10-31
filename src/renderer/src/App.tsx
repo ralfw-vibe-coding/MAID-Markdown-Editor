@@ -23,7 +23,10 @@ import { markdownKeymap } from './editor/markdownKeymap'
 import { useDocumentFile } from './doc/useDocumentFile'
 import { useSettings } from './settings/useSettings'
 import { SettingsDialog } from './settings/SettingsDialog'
-import { appendMessage, createThread, message, syncEditStates, updateThread, type Thread } from './thread/thread'
+import { ChatPanel } from './chat/ChatPanel'
+import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer } from './chat/chat'
+import { MessageSquareText, MessagesSquare } from 'lucide-react'
+import { appendMessage, createThread, message, syncEditStates, updateThread, type Message, type Thread } from './thread/thread'
 import { ThreadPanel } from './thread/ThreadPanel'
 import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
 import { minimalChange, planEdit } from './ai/planEdit'
@@ -74,6 +77,10 @@ export function App() {
   const [threads, setThreads] = useState<Thread[]>([])
   /** Threads, in denen gerade eine KI-Anfrage läuft. */
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
+  /** Seitenpanel: Kommentar-Threads oder freier Chat zum ganzen Dokument. */
+  const [panel, setPanel] = useState<'comments' | 'chat'>('comments')
+  const [chat, setChat] = useState<Message[]>([])
+  const [chatBusy, setChatBusy] = useState(false)
   const { settings, update: updateSettings } = useSettings(host)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [pending, setPending] = useState<Pending | null>(null)
@@ -128,13 +135,16 @@ export function App() {
     doc,
     anchors,
     threads,
-    load(content, loaded, loadedThreads) {
+    chat,
+    load(content, loaded, loadedThreads, loadedChat) {
       const view = viewRef.current!
       view.setState(EditorState.create({ doc: content, extensions }))
       setDoc(content)
       setAnchors([])
       view.dispatch({ effects: setAnchorsEffect.of(loaded) })
       setThreads(loadedThreads)
+      setChat(loadedChat)
+      setChatBusy(false)
       setBusy(new Set())
       setPending(null)
       setActiveId(null)
@@ -183,6 +193,7 @@ export function App() {
     threadsRef.current = [...threadsRef.current, thread]
     setPending(null)
     setActiveId(anchor.id)
+    setPanel('comments')
     window.getSelection()?.removeAllRanges()
     if (withAi && host) void askAi(anchor.id, 'discuss')
   }
@@ -297,6 +308,7 @@ export function App() {
     threadsRef.current = [...threadsRef.current, thread]
     setPending(null)
     setActiveId(anchor.id)
+    setPanel('comments')
   }
   const threadFromEditorRef = useRef(threadFromEditor)
   threadFromEditorRef.current = threadFromEditor
@@ -306,6 +318,7 @@ export function App() {
       host?.onMenu((command) => {
         if (command === 'askAi') threadFromEditorRef.current()
         if (command === 'settings') setSettingsOpen(true)
+        if (command === 'chat') setPanel('chat')
       }),
     [],
   )
@@ -316,6 +329,26 @@ export function App() {
     const rect = main.getBoundingClientRect()
     const width = rect.width - THREADS_WIDTH - SPLITTER_WIDTH
     setSplit(clampSplit((e.clientX - rect.left) / width))
+  }
+
+  async function askChat(text: string) {
+    const view = viewRef.current
+    if (!host || !view) return
+    const question = message({ kind: 'user', text })
+    const messages = [...chat, question]
+    setChat(messages)
+    setChatBusy(true)
+    try {
+      const { from, to } = view.state.selection.main
+      const prompt = buildChatPrompt({ doc: view.state.doc.toString(), focus: { from, to }, messages })
+      const result = await host.askAi({ prompt, systemPrompt: CHAT_SYSTEM_PROMPT, schema: CHAT_SCHEMA })
+      const answer = result.ok ? message({ kind: 'ai', text: parseChatAnswer(result.data) }) : message({ kind: 'error', text: result.error })
+      setChat((c) => [...c, answer])
+    } catch (err) {
+      setChat((c) => [...c, message({ kind: 'error', text: (err as Error).message })])
+    } finally {
+      setChatBusy(false)
+    }
   }
 
   function focusThread(id: string) {
@@ -388,22 +421,34 @@ export function App() {
           <h2>Druckfahne</h2>
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
         </section>
-        <aside className={`pane threads ${activeId ? 'chat-open' : ''}`}>
-          <h2>Kommentare</h2>
-          <ThreadPanel
-            doc={doc}
-            anchors={anchors}
-            threads={threads}
-            activeId={activeId}
-            busy={busy}
-            aiAvailable={!!host}
-            onOpen={focusThread}
-            onClose={closeChat}
-            onSend={send}
-            onExecute={(id) => void askAi(id, 'execute')}
-            onRevert={revert}
-            onRemove={removeThread}
-          />
+        <aside className={`pane threads ${activeId || panel === 'chat' ? 'chat-open' : ''}`}>
+          <div className="panel-tabs" role="tablist">
+            <button role="tab" aria-selected={panel === 'comments'} className={panel === 'comments' ? 'active' : ''} onClick={() => setPanel('comments')}>
+              <MessageSquareText size={14} /> Kommentare
+            </button>
+            <button role="tab" aria-selected={panel === 'chat'} className={panel === 'chat' ? 'active' : ''} onClick={() => setPanel('chat')}>
+              <MessagesSquare size={14} /> Chat
+              {chatBusy && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
+            </button>
+          </div>
+          {panel === 'chat' ? (
+            <ChatPanel messages={chat} busy={chatBusy} aiAvailable={!!host} onSend={(t) => void askChat(t)} onReset={() => setChat([])} />
+          ) : (
+            <ThreadPanel
+              doc={doc}
+              anchors={anchors}
+              threads={threads}
+              activeId={activeId}
+              busy={busy}
+              aiAvailable={!!host}
+              onOpen={focusThread}
+              onClose={closeChat}
+              onSend={send}
+              onExecute={(id) => void askAi(id, 'execute')}
+              onRevert={revert}
+              onRemove={removeThread}
+            />
+          )}
         </aside>
       </main>
 

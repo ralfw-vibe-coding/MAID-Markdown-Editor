@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MaidHost, MenuCommand } from '../../../shared/host'
 import type { Anchor } from '../anchor/anchors'
-import type { Thread } from '../thread/thread'
+import type { Message, Thread } from '../thread/thread'
 import { contentHash, parseSidecar, restoreThreads, serializeSidecar } from './sidecar'
 
 const fileName = (path: string | null) => (path ? path.split('/').pop()! : 'Unbenannt')
@@ -22,22 +22,24 @@ type Options = {
   doc: string
   anchors: Anchor[]
   threads: Thread[]
-  /** Lädt Text, Anker und Threads (setzt die Undo-Historie zurück). */
-  load: (content: string, anchors: Anchor[], threads: Thread[]) => void
+  chat: Message[]
+  /** Lädt Text, Anker, Threads und Chat (setzt die Undo-Historie zurück). */
+  load: (content: string, anchors: Anchor[], threads: Thread[], chat: Message[]) => void
 }
 
 /**
  * Datei-Lebenszyklus des aktuellen Dokuments: Neu, Öffnen, Sichern, Sichern unter,
  * ungesicherte Änderungen. Kommentare werden in der Begleitdatei mitgesichert.
  */
-export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load }: Options) {
+export function useDocumentFile({ host, initialDoc, doc, anchors, threads, chat, load }: Options) {
   const [path, setPath] = useState<string | null>(null)
-  const [saved, setSaved] = useState<{ doc: string; anchors: Anchor[]; threads: Thread[] }>({ doc: initialDoc, anchors: [], threads: [] })
+  const [saved, setSaved] = useState<{ doc: string; anchors: Anchor[]; threads: Thread[]; chat: Message[] }>({ doc: initialDoc, anchors: [], threads: [], chat: [] })
   /** Begleitdatei war nicht lesbar: beim Sichern nicht überschreiben. */
   const [keepSidecar, setKeepSidecar] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const threadsChanged = threads !== saved.threads && (threads.length > 0 || saved.threads.length > 0)
-  const dirty = doc !== saved.doc || threadsChanged || !sameAnchors(anchors, saved.anchors)
+  const chatChanged = chat !== saved.chat && (chat.length > 0 || saved.chat.length > 0)
+  const dirty = doc !== saved.doc || threadsChanged || chatChanged || !sameAnchors(anchors, saved.anchors)
   const name = fileName(path)
 
   async function save(asNew = false): Promise<boolean> {
@@ -45,15 +47,15 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load 
     const target = asNew || !path ? await host.saveDialog(path ? name : 'Unbenannt.md') : path
     if (!target) return false
     const content = doc
-    const current = { anchors, threads }
+    const current = { anchors, threads, chat }
     const sidecar =
-      keepSidecar && threads.length === 0
+      keepSidecar && threads.length === 0 && chat.length === 0
         ? undefined
-        : serializeSidecar(content, anchors, threads, fileName(target), await contentHash(content))
+        : serializeSidecar(content, anchors, threads, chat, fileName(target), await contentHash(content))
     await host.write(target, content, sidecar)
     setPath(target)
     setSaved({ doc: content, ...current })
-    if (threads.length > 0) setKeepSidecar(false)
+    if (threads.length > 0 || chat.length > 0) setKeepSidecar(false)
     return true
   }
 
@@ -68,9 +70,9 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load 
 
   async function newDocument() {
     if (!(await confirmLeave())) return
-    load('', [], [])
+    load('', [], [], [])
     setPath(null)
-    setSaved({ doc: '', anchors: [], threads: [] })
+    setSaved({ doc: '', anchors: [], threads: [], chat: [] })
     setKeepSidecar(false)
   }
 
@@ -79,7 +81,7 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load 
     const chosen = target ?? (await host.openDialog())
     if (!chosen) return
     const file = await host.read(chosen)
-    let restored: { anchors: Anchor[]; threads: Thread[] } = { anchors: [], threads: [] }
+    let restored: { anchors: Anchor[]; threads: Thread[]; chat: Message[] } = { anchors: [], threads: [], chat: [] }
     let sidecarBroken = false
     if (file.sidecar !== null) {
       try {
@@ -89,7 +91,7 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load 
         setError(`Kommentare konnten nicht gelesen werden (${(err as Error).message}). Die Begleitdatei bleibt unverändert.`)
       }
     }
-    load(file.content, restored.anchors, restored.threads)
+    load(file.content, restored.anchors, restored.threads, restored.chat)
     setPath(chosen)
     setSaved({ doc: file.content, ...restored })
     setKeepSidecar(sidecarBroken)

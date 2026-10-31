@@ -15,6 +15,8 @@ export type Sidecar = {
   contentHash: string
   savedAt: string
   threads: StoredThread[]
+  /** Freier Chat zum Dokument (fehlt in älteren Begleitdateien). */
+  chat?: Message[]
 }
 
 export type StoredThread = {
@@ -34,8 +36,15 @@ export async function contentHash(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Liefert null, wenn es keine Threads gibt – dann wird keine Begleitdatei geschrieben. */
-export function serializeSidecar(doc: string, anchors: Anchor[], threads: Thread[], documentName: string, hash: string): string | null {
+/** Liefert null, wenn es weder Threads noch Chat gibt – dann wird keine Begleitdatei geschrieben. */
+export function serializeSidecar(
+  doc: string,
+  anchors: Anchor[],
+  threads: Thread[],
+  chat: Message[],
+  documentName: string,
+  hash: string,
+): string | null {
   const stored: StoredThread[] = []
   for (const t of threads) {
     const a = anchors.find((x) => x.id === t.id)
@@ -56,7 +65,7 @@ export function serializeSidecar(doc: string, anchors: Anchor[], threads: Thread
       messages: t.messages,
     })
   }
-  if (stored.length === 0) return null
+  if (stored.length === 0 && chat.length === 0) return null
   const sidecar: Sidecar = {
     format: 'maid-sidecar',
     version: 1,
@@ -64,6 +73,7 @@ export function serializeSidecar(doc: string, anchors: Anchor[], threads: Thread
     contentHash: hash,
     savedAt: new Date().toISOString(),
     threads: stored,
+    ...(chat.length > 0 ? { chat } : {}),
   }
   return JSON.stringify(sidecar, null, 2) + '\n'
 }
@@ -82,7 +92,7 @@ export function parseSidecar(json: string): Sidecar {
 }
 
 /** Stellt Anker und Threads eines geöffneten Dokuments aus der Begleitdatei wieder her. */
-export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { anchors: Anchor[]; threads: Thread[] } {
+export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { anchors: Anchor[]; threads: Thread[]; chat: Message[] } {
   const unchanged = sidecar.contentHash === hash
   const anchors = sidecar.threads.map((t): Anchor => {
     const placed = reanchor(doc, t.anchor, unchanged)
@@ -96,5 +106,5 @@ export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { a
     }
   })
   const threads = sidecar.threads.map((t): Thread => ({ id: t.id, createdAt: t.createdAt, messages: t.messages }))
-  return { anchors, threads }
+  return { anchors, threads, chat: sidecar.chat ?? [] }
 }

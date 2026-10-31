@@ -18,13 +18,13 @@ const positions = (anchors: { id: string; from: number; to: number; status: stri
 
 describe('Begleitdatei', () => {
   it('ohne Threads wird keine Begleitdatei geschrieben', () => {
-    expect(serializeSidecar(doc, [], [], 'text.md', 'h')).toBeNull()
+    expect(serializeSidecar(doc, [], [], [], 'text.md', 'h')).toBeNull()
   })
 
   it('Rundreise: sichern und wieder öffnen ergibt dieselben Anker und Nachrichten', async () => {
     const { anchors, threads } = setup('fettes** Wort', 'Jörg 😀')
     threads[0].messages.push(message({ kind: 'ai', text: 'Antwort' }), message({ kind: 'edit', before: 'a', after: 'b' }))
-    const json = serializeSidecar(doc, anchors, threads, 'text.md', await contentHash(doc))!
+    const json = serializeSidecar(doc, anchors, threads, [], 'text.md', await contentHash(doc))!
     const restored = restoreThreads(doc, parseSidecar(json), await contentHash(doc))
     expect(positions(restored.anchors)).toEqual(positions(anchors))
     expect(restored.threads).toEqual(threads)
@@ -32,7 +32,7 @@ describe('Begleitdatei', () => {
 
   it('nach externer Änderung werden Anker neu zugeordnet', async () => {
     const { anchors, threads } = setup('Jörg 😀')
-    const json = serializeSidecar(doc, anchors, threads, 'text.md', await contentHash(doc))!
+    const json = serializeSidecar(doc, anchors, threads, [], 'text.md', await contentHash(doc))!
     const changed = '# Titel\n\n' + doc
     const [a] = restoreThreads(changed, parseSidecar(json), await contentHash(changed)).anchors
     expect(changed.slice(a.from, a.to)).toBe('Jörg 😀')
@@ -50,6 +50,12 @@ describe('Begleitdatei', () => {
     })
     const [m] = parseSidecar(legacy).threads[0].messages
     expect(m).toMatchObject({ kind: 'user', text: 'Hallo' })
+  })
+
+  it('sichert den Chat auch ohne Threads', async () => {
+    const chat = [message({ kind: 'user', text: 'Fasse zusammen' }), message({ kind: 'ai', text: '**Kurz:** …' })]
+    const json = serializeSidecar(doc, [], [], chat, 'text.md', await contentHash(doc))!
+    expect(restoreThreads(doc, parseSidecar(json), await contentHash(doc)).chat).toEqual(chat)
   })
 
   it('lehnt fremde JSON-Dateien ab', () => {

@@ -133,3 +133,28 @@ button.link { border: none; background: none; color: var(--muted); cursor: point
 .modal .font-row input[type="number"] { width: 60px; }
 .modal .unit { color: var(--muted); }
 .modal .hint { margin: 4px 0 0 120px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+/* Seitenpanel: Umschalter Kommentare / Chat */
+.panel-tabs { display: flex; gap: 2px; padding: 5px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 1; flex-shrink: 0; }
+.panel-tabs button { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; padding: 4px 10px; border: none; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.panel-tabs button:hover { color: var(--ink); background: #f1efe9; }
+.panel-tabs button.active { color: var(--ink); background: #ebe7df; font-weight: 600; }
+.panel-tabs .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* Freier Chat */
+.global-chat { border-color: var(--line); }
+.global-chat .chat-head .muted { font-size: 12px; }
+.chat-empty { margin: auto 8px; text-align: center; font-size: 13px; }
+.msg-markdown { white-space: normal; max-width: 100%; }
+.markdown { font-family: inherit; font-size: 13px; line-height: 1.5; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 { font-size: 14px; margin: 10px 0 4px; }
+.markdown p { margin: 6px 0; }
+.markdown ul, .markdown ol { margin: 6px 0; padding-left: 18px; }
+.markdown li { margin: 2px 0; }
+.markdown blockquote { margin: 6px 0; padding-left: 8px; border-left: 3px solid var(--line); color: #4b4740; }
+.markdown pre { background: #f5f3ee; padding: 6px 8px; border-radius: 6px; overflow: auto; white-space: pre; }
+.markdown code { font-size: .9em; }
+.markdown table { border-collapse: collapse; font-size: 12px; }
+.markdown th, .markdown td { border: 1px solid var(--line); padding: 2px 6px; }

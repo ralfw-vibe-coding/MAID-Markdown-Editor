@@ -21,14 +21,15 @@ function toReact(node: RNode, segments: Segment[], key: number): ReactNode {
 type Props = {
   model: PreviewModel
   onMouseUp?: () => void
+  className?: string
 }
 
 /** Druckfahne: rendert den Darstellungsbaum; jeder Textabschnitt trägt `data-seg`. */
-export const Preview = forwardRef<HTMLDivElement, Props>(function Preview({ model, onMouseUp }, ref) {
+export const Preview = forwardRef<HTMLDivElement, Props>(function Preview({ model, onMouseUp, className = 'preview' }, ref) {
   return (
     <div
       ref={ref}
-      className="preview"
+      className={className}
       onMouseUp={onMouseUp}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest('a')) e.preventDefault()

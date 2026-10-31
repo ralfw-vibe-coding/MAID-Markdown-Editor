@@ -188,8 +188,11 @@ function buildMenu() {
     },
     { role: 'editMenu' },
     {
-      label: 'Kommentar',
-      submenu: [{ label: 'Mit KI besprechen', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') }],
+      label: 'KI',
+      submenu: [
+        { label: 'Mit KI besprechen', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
+        { label: 'Chat mit Claude', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
+      ],
     },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
