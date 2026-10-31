@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { basicSetup } from 'codemirror'
-import { EditorState, type Extension } from '@codemirror/state'
+import { EditorState, Prec, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
 import { IMAGE_EXTENSIONS, LOCAL_FILE_SCHEME, type MaidHost } from '../../shared/host'
@@ -171,18 +171,22 @@ export function App() {
       EditorView.lineWrapping,
       anchorField,
       anchorHistory,
-      // In der App kommen diese Kürzel über die Menüs „KI“ und „Format“; im Browser direkt im Editor.
-      host
-        ? []
-        : keymap.of([
-            { key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) },
-            { key: 'Mod-b', run: formatCommands.bold },
-            { key: 'Mod-i', run: formatCommands.italic },
-            { key: 'Mod-u', run: formatCommands.underline },
-            { key: 'Mod-Shift-x', run: formatCommands.strike },
-            { key: 'Mod-Shift-h', run: formatCommands.highlight },
-            { key: 'Mod-k', run: formatCommands.link },
-          ]),
+      // Unsere Kürzel mit Vorrang: CodeMirror belegt ⌘I (Block auswählen), ⌘U (Auswahl
+      // zurücknehmen), ⇧⌘K (Zeile löschen) und ⇧⌘L (alle Treffer auswählen) selbst, und
+      // der Editor sieht Tasten vor dem Menü. Was der Editor behandelt, löst den
+      // Menüeintrag nicht mehr aus – also nichts doppelt.
+      Prec.highest(
+        keymap.of([
+          { key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) },
+          { key: 'Mod-Shift-l', run: () => (newChatRef.current(), true) },
+          { key: 'Mod-b', run: formatCommands.bold },
+          { key: 'Mod-i', run: formatCommands.italic },
+          { key: 'Mod-u', run: formatCommands.underline },
+          { key: 'Mod-Shift-x', run: formatCommands.strike },
+          { key: 'Mod-Shift-h', run: formatCommands.highlight },
+          { key: 'Mod-k', run: formatCommands.link },
+        ]),
+      ),
       // Bilder aus der Zwischenablage oder per Ziehen landen im Bilderordner neben dem Dokument.
       EditorView.domEventHandlers({
         paste(e, view) {
