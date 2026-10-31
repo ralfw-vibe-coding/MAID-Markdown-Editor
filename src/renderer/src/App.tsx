@@ -29,11 +29,9 @@ import { SettingsDialog } from './settings/SettingsDialog'
 import { ChatPanel } from './chat/ChatPanel'
 import { createChat, renameChat, suggestTitle, updateChat, type Chat } from './chat/chats'
 import { buildChatPrompt, CHAT_SCHEMA, CHAT_SYSTEM_PROMPT, parseChatAnswer, type EditorFocus } from './chat/chat'
-import { History, Link2, Link2Off, MessageSquareText, MessagesSquare } from 'lucide-react'
+import { Link2, Link2Off, MessageSquareText, MessagesSquare } from 'lucide-react'
 import { useVersions } from './versions/useVersions'
-import { VersionsPanel } from './versions/VersionsPanel'
-import { DiffView } from './versions/DiffView'
-import { SaveVersionDialog } from './versions/SaveVersionDialog'
+import { VersionsPane } from './versions/VersionsPane'
 import { lineChanges } from './versions/versions'
 import { buildVersionMessagePrompt, VERSION_MESSAGE_SCHEMA, VERSION_MESSAGE_SYSTEM } from './versions/versionMessage'
 import { useScrollSync } from './layout/useScrollSync'
@@ -44,6 +42,10 @@ import {
   gridColumns,
   cannotCollapse,
   clampSide,
+  clampVersions,
+  loadVersionsWidth,
+  saveVersionsWidth,
+  VERSIONS_DEFAULT,
   loadSideWidth,
   saveSideWidth,
   SIDE_DEFAULT,
@@ -71,9 +73,12 @@ const initialDoc = host ? '' : sampleDoc
 
 type Pending = SourceRange & { x: number; y: number }
 
+/** Ziehbare Trenner zwischen den Spalten. */
+type Splitter = 'versions' | 'split' | 'side'
+
 /** Inhalt des Seitenpanels. */
-type SidePanel = 'comments' | 'chat' | 'versions'
-const PANEL_TITLE: Record<SidePanel, string> = { comments: 'Kommentare', chat: 'Chat', versions: 'Versionen' }
+type SidePanel = 'comments' | 'chat'
+const PANEL_TITLE: Record<SidePanel, string> = { comments: 'Kommentare', chat: 'Chat' }
 
 /** Bilddateien aus Zwischenablage oder Ziehen. */
 function imageFiles(list: FileList | undefined | null): File[] {
@@ -123,16 +128,18 @@ export function App() {
   const [chatBusy, setChatBusy] = useState<ReadonlySet<string>>(new Set())
   const { settings, update: updateSettings } = useSettings(host)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [saveVersionOpen, setSaveVersionOpen] = useState(false)
-  /** Version, deren Vergleich anstelle der Druckfahne steht. */
-  const [shownVersionId, setShownVersionId] = useState<string | null>(null)
+  /** In der Versionsspalte gewählte Version (Vergleich); null = aktueller Stand. */
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
+  /** Erhöht, wenn das Nachrichtenfeld der Versionsspalte den Fokus bekommen soll (⌥⌘S). */
+  const [versionFocus, setVersionFocus] = useState(0)
   const [pending, setPending] = useState<Pending | null>(null)
   const [draft, setDraft] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [split, setSplit] = useState(loadSplit)
   /** Welcher Trenner gerade gezogen wird. */
-  const [dragging, setDragging] = useState<'split' | 'side' | null>(null)
+  const [dragging, setDragging] = useState<Splitter | null>(null)
   const [sideW, setSideW] = useState(loadSideWidth)
+  const [versionsW, setVersionsW] = useState(loadVersionsWidth)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
   /** Mitlaufendes Scrollen von Manuskript und Druckfahne (Kette im Titel der Druckfahne). */
   const [syncScroll, setSyncScroll] = useState(() => {
@@ -283,7 +290,7 @@ export function App() {
       view.dispatch({ effects: setAnchorsEffect.of(loaded) })
       setThreads(loadedThreads)
       setChats(loadedChats)
-      setShownVersionId(null)
+      setSelectedVersionId(null)
       setActiveChatId(null)
       setChatBusy(new Set())
       setBusy(new Set())
@@ -297,7 +304,7 @@ export function App() {
     viewRef,
     previewRef,
     segments: model.segments,
-    enabled: syncScroll && !collapsed.editor && !collapsed.preview && !shownVersionId,
+    enabled: syncScroll && !collapsed.editor && !collapsed.preview,
   })
 
   /** Einfacher Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript. */
@@ -324,24 +331,32 @@ export function App() {
   }, [file.path])
 
   const versions = useVersions(host, file.path)
-  const shownVersion = versions.versions.find((v) => v.id === shownVersionId)
   useEffect(() => {
     if (versions.error) file.showError(versions.error)
   }, [versions.error])
 
+  /** Neue Version; Fehler gehen an das Formular der Versionsspalte. */
   async function saveVersion(message: string) {
     const view = viewRef.current
     if (!host || !view) return
-    setSaveVersionOpen(false)
-    try {
-      const docPath = await file.ensurePath()
-      if (!docPath) return file.showError('Für Versionen das Dokument bitte zuerst sichern – sie liegen neben der Datei.')
-      await versions.add(docPath, view.state.doc.toString(), message)
-      showSide('versions')
-    } catch (err) {
-      file.showError(`Version konnte nicht gesichert werden: ${(err as Error).message}`)
-    }
+    const docPath = await file.ensurePath()
+    if (!docPath) throw new Error('Für Versionen das Dokument bitte zuerst sichern – sie liegen neben der Datei.')
+    await versions.add(docPath, view.state.doc.toString(), message)
+    setSelectedVersionId(null)
   }
+
+  /** ⌥⌘S: Versionsspalte aufklappen und ins Nachrichtenfeld. */
+  function openVersions() {
+    setCollapsed((c) => {
+      if (!c.versions) return c
+      const next = { ...c, versions: false }
+      saveCollapsed(next)
+      return next
+    })
+    setVersionFocus((n) => n + 1)
+  }
+  const openVersionsRef = useRef(openVersions)
+  openVersionsRef.current = openVersions
 
   async function suggestVersionMessage(): Promise<string> {
     const view = viewRef.current
@@ -364,7 +379,7 @@ export function App() {
     try {
       if (versions.versions.at(-1)?.text !== current) await versions.add(file.path, current, `Vor Rückkehr zu „${target.message}“`, true)
       view.dispatch({ changes: lineChanges(current, target.text), userEvent: 'input.restore', scrollIntoView: true })
-      setShownVersionId(null)
+      setSelectedVersionId(null)
     } catch (err) {
       file.showError(`Zurückgehen fehlgeschlagen: ${(err as Error).message}`)
     }
@@ -593,7 +608,7 @@ export function App() {
       host?.onMenu((command) => {
         if (command === 'askAi') threadFromEditorRef.current()
         if (command === 'settings') setSettingsOpen(true)
-        if (command === 'saveVersion') setSaveVersionOpen(true)
+        if (command === 'saveVersion') openVersionsRef.current()
         if (command === 'chat') newChatRef.current()
         if (command.startsWith('format:')) {
           // Nicht in Eingabefeldern (Chat, Kommentar) – dort gilt das Kürzel nicht dem Manuskript.
@@ -609,17 +624,19 @@ export function App() {
     if (!dragging || !main) return
     const rect = main.getBoundingClientRect()
     if (dragging === 'side') return setSideW(clampSide(rect.right - e.clientX - SPLITTER_WIDTH / 2, rect.width))
-    const side = collapsed.side ? COLLAPSED_WIDTH : sideW + SPLITTER_WIDTH
-    const width = rect.width - side - SPLITTER_WIDTH
-    setSplit(clampSplit((e.clientX - rect.left) / width))
+    if (dragging === 'versions') return setVersionsW(clampVersions(e.clientX - rect.left - SPLITTER_WIDTH / 2, rect.width))
+    const left = collapsed.versions ? COLLAPSED_WIDTH : versionsW + SPLITTER_WIDTH
+    const right = collapsed.side ? COLLAPSED_WIDTH : sideW + SPLITTER_WIDTH
+    const width = rect.width - left - right - SPLITTER_WIDTH
+    setSplit(clampSplit((e.clientX - rect.left - left) / width))
   }
 
-  /** Gemeinsames Verhalten beider Trenner: ziehen, loslassen merkt die Breite, Doppelklick setzt zurück. */
-  const splitterProps = (kind: 'split' | 'side') => ({
+  /** Gemeinsames Verhalten der Trenner: ziehen, loslassen merkt die Breite, Doppelklick setzt zurück. */
+  const splitterProps = (kind: Splitter) => ({
     role: 'separator',
     'aria-orientation': 'vertical' as const,
     title: 'Ziehen zum Ändern der Breite, Doppelklick setzt zurück',
-    className: `splitter ${(kind === 'split' ? splitters.split : splitters.side) ? '' : 'hidden'}`,
+    className: `splitter ${splitters[kind] ? '' : 'hidden'}`,
     onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
       e.preventDefault()
       e.currentTarget.setPointerCapture(e.pointerId)
@@ -629,15 +646,19 @@ export function App() {
     onPointerUp: () => {
       setDragging(null)
       if (kind === 'split') saveSplit(split)
-      else saveSideWidth(sideW)
+      else if (kind === 'side') saveSideWidth(sideW)
+      else saveVersionsWidth(versionsW)
     },
     onDoubleClick: () => {
       if (kind === 'split') {
         setSplit(0.5)
         saveSplit(0.5)
-      } else {
+      } else if (kind === 'side') {
         setSideW(SIDE_DEFAULT)
         saveSideWidth(SIDE_DEFAULT)
+      } else {
+        setVersionsW(VERSIONS_DEFAULT)
+        saveVersionsWidth(VERSIONS_DEFAULT)
       }
     },
   })
@@ -764,9 +785,32 @@ export function App() {
       <main
         ref={mainRef}
         className={dragging ? 'dragging' : undefined}
-        style={{ gridTemplateColumns: gridColumns(collapsed, split, SPLITTER_WIDTH, sideW) }}
+        style={{ gridTemplateColumns: gridColumns(collapsed, split, SPLITTER_WIDTH, sideW, versionsW) }}
       >
         {/* Weggeklappte Spalten bleiben im DOM, damit Editor, Entwürfe und Verlauf erhalten bleiben. */}
+        <section className={`pane versions-column ${collapsed.versions ? 'collapsed' : ''}`}>
+          {collapsed.versions && <CollapsedStrip title="Versionen" onExpand={() => togglePane('versions')} />}
+          <h2>
+            Versionen
+            <CollapseButton disabled={cannotCollapse(collapsed, 'versions')} onClick={() => togglePane('versions')} />
+          </h2>
+          <VersionsPane
+            versions={versions.versions}
+            selectedId={selectedVersionId}
+            current={doc}
+            available={!!host}
+            focusToken={versionFocus}
+            onSave={saveVersion}
+            onSuggest={host ? suggestVersionMessage : undefined}
+            onSelect={setSelectedVersionId}
+            onRestore={(id) => void restoreVersion(id)}
+            onRemove={(id) => {
+              if (file.path) void versions.remove(file.path, id)
+              if (selectedVersionId === id) setSelectedVersionId(null)
+            }}
+          />
+        </section>
+        <div {...splitterProps('versions')} />
         <section className={`pane manuscript ${collapsed.editor ? 'collapsed' : ''}`}>
           {collapsed.editor && <CollapsedStrip title="Manuskript" onExpand={() => togglePane('editor')} />}
           <h2>
@@ -792,26 +836,14 @@ export function App() {
             </button>
             <CollapseButton disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
           </h2>
-          {shownVersion && (
-            <DiffView
-              version={shownVersion}
-              previous={versions.versions[versions.versions.indexOf(shownVersion) - 1]}
-              current={doc}
-              onRestore={() => void restoreVersion(shownVersion.id)}
-              onClose={() => setShownVersionId(null)}
-            />
-          )}
-          {/* Die Druckfahne bleibt beim Vergleich im DOM (Hervorhebungen, Scrollposition). */}
-          <div className={shownVersion ? 'hidden-preview' : 'preview-host'}>
-            <Preview
-              ref={previewRef}
-              model={model}
-              onMouseUp={onPreviewMouseUp}
-              onClick={onPreviewClick}
-              resolveSrc={resolveSrc}
-              onImageResize={resizeImage}
-            />
-          </div>
+          <Preview
+            ref={previewRef}
+            model={model}
+            onMouseUp={onPreviewMouseUp}
+            onClick={onPreviewClick}
+            resolveSrc={resolveSrc}
+            onImageResize={resizeImage}
+          />
         </section>
         <div {...splitterProps('side')} />
         <aside className={`pane threads ${(panel === 'comments' ? activeId : activeChatId) ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>
@@ -826,27 +858,9 @@ export function App() {
               <MessagesSquare size={14} /> Chat
               {chatBusy.size > 0 && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
-            <button role="tab" aria-selected={panel === 'versions'} className={panel === 'versions' ? 'active' : ''} onClick={() => showSide('versions')}>
-              <History size={14} /> Versionen
-            </button>
             <CollapseButton disabled={cannotCollapse(collapsed, 'side')} onClick={() => togglePane('side')} />
           </div>
-          {panel === 'versions' ? (
-            <VersionsPanel
-              versions={versions.versions}
-              shownId={shownVersionId}
-              available={!!host}
-              onSave={() => setSaveVersionOpen(true)}
-              onShow={(id) => {
-                setShownVersionId(id)
-                if (collapsed.preview) togglePane('preview')
-              }}
-              onRemove={(id) => {
-                if (file.path) void versions.remove(file.path, id)
-                if (shownVersionId === id) setShownVersionId(null)
-              }}
-            />
-          ) : panel === 'chat' ? (
+          {panel === 'chat' ? (
             <ChatPanel
               doc={doc}
               chats={chats}
@@ -885,14 +899,6 @@ export function App() {
           )}
         </aside>
       </main>
-
-      {saveVersionOpen && (
-        <SaveVersionDialog
-          onSuggest={host ? suggestVersionMessage : undefined}
-          onSave={(m) => void saveVersion(m)}
-          onClose={() => setSaveVersionOpen(false)}
-        />
-      )}
 
       {settingsOpen && (
         <SettingsDialog host={host} settings={settings} onChange={updateSettings} onClose={() => setSettingsOpen(false)} />
