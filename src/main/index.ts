@@ -26,13 +26,15 @@ const windows = new Map<number, DocWindow>()
 const startupPaths: string[] = []
 /** ⌘Q läuft: nach jeder Rückfrage weiter schließen; „Abbrechen“ beendet das Beenden. */
 let quitting = false
+/** Zuletzt aktives Fenster – Ziel von Menübefehlen, wenn gerade keins den Fokus hat (z. B. alle minimiert). */
+let lastFocusedId: number | null = null
 
 const docName = (dw: DocWindow) => (dw.path ? basename(dw.path) : 'Unbenannt')
 const senderWindow = (e: IpcMainEvent | IpcMainInvokeEvent) => windows.get(e.sender.id)
 
 function focusedDocWindow(): DocWindow | undefined {
   const w = BrowserWindow.getFocusedWindow()
-  return w ? windows.get(w.webContents.id) : undefined
+  return (w && windows.get(w.webContents.id)) || (lastFocusedId !== null ? windows.get(lastFocusedId) : undefined)
 }
 
 /** Menübefehle gehen an das aktive Fenster. */
@@ -81,6 +83,10 @@ function createWindow(path?: string): DocWindow {
   const id = win.webContents.id
   const dw: DocWindow = { win, ready: false, pending: path ? [path] : [], path: null, dirty: false, pristine: !path, closeConfirmed: false }
   windows.set(id, dw)
+  lastFocusedId = id
+  win.on('focus', () => {
+    lastFocusedId = id
+  })
 
   win.on('close', async (e) => {
     if (!dw.dirty || dw.closeConfirmed) return
@@ -94,6 +100,7 @@ function createWindow(path?: string): DocWindow {
   })
   win.on('closed', () => {
     windows.delete(id)
+    if (lastFocusedId === id) lastFocusedId = [...windows.keys()].at(-1) ?? null
     // Beim Beenden nach einer Rückfrage mit den übrigen Fenstern weitermachen.
     if (quitting && windows.size > 0) app.quit()
   })
@@ -246,8 +253,9 @@ function buildMenu() {
     {
       label: 'KI',
       submenu: [
-        { label: 'Mit KI besprechen', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
-        { label: 'Chat mit Claude', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
+        // Kommentar: an eine Stelle gebunden (Markierung oder Cursor). Chat: zum ganzen Dokument.
+        { label: 'Kommentar zur Markierung', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
+        { label: 'Neuer Chat zum Dokument', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
       ],
     },
     { role: 'viewMenu' },

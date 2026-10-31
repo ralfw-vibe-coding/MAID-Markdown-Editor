@@ -394,15 +394,14 @@ export function App() {
   }
   const threadFromEditorRef = useRef(threadFromEditor)
   threadFromEditorRef.current = threadFromEditor
-  const showSideRef = useRef(showSide)
-  showSideRef.current = showSide
+  const newChatRef = useRef(() => {})
 
   useEffect(
     () =>
       host?.onMenu((command) => {
         if (command === 'askAi') threadFromEditorRef.current()
         if (command === 'settings') setSettingsOpen(true)
-        if (command === 'chat') showSideRef.current('chat')
+        if (command === 'chat') newChatRef.current()
       }),
     [],
   )
@@ -496,7 +495,9 @@ export function App() {
     const chat = createChat()
     setChats((cs) => [...cs, chat])
     setActiveChatId(chat.id)
+    showSide('chat')
   }
+  newChatRef.current = newChat
 
   /**
    * Führt eine Chat-Änderung aus: an der Markierung bzw. Cursorposition, sonst an
