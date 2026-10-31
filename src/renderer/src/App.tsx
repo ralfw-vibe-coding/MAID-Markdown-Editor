@@ -508,25 +508,25 @@ export function App() {
 
   return (
     <div className="app">
-      <header>
-        <strong>MAID</strong>
-        {host ? (
-          <span className="doc-name">
-            {file.name}
-            {file.dirty && <span className="dirty" title="Ungesicherte Änderungen"> ●</span>}
-          </span>
-        ) : (
-          <span className="muted">Web-Vorschau ohne Dateizugriff</span>
-        )}
-        {file.error && (
-          <span className="error">
-            {file.error}
-            <button className="link" onClick={file.clearError}>
-              ×
-            </button>
-          </span>
-        )}
-      </header>
+      {/* In der App stehen Dateiname und „ungesichert“ in der macOS-Titelleiste; hier nur Fehler. */}
+      {(!host || file.error) && (
+        <header>
+          {!host && (
+            <>
+              <strong>MAID</strong>
+              <span className="muted">Web-Vorschau ohne Dateizugriff</span>
+            </>
+          )}
+          {file.error && (
+            <span className="error">
+              {file.error}
+              <button className="link" onClick={file.clearError}>
+                ×
+              </button>
+            </span>
+          )}
+        </header>
+      )}
       <main
         ref={mainRef}
         className={dragging ? 'dragging' : undefined}
