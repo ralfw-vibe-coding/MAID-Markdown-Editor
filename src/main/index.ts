@@ -1,10 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { channels, LEGACY_VERSIONS_SUFFIX, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
 import { askClaude, claudeInfo } from './ai'
 import { getSettings, updateSettings } from './settings'
 import { handleLocalFileScheme, registerLocalFileScheme, saveImage } from './images'
+import { clearRecentDocuments, noteRecentDocument, recentDocuments } from './recent'
 
 /** Zustand eines Dokumentfensters – jedes Fenster hat genau ein Dokument. */
 type DocWindow = {
@@ -124,6 +125,35 @@ async function showOpenDialog() {
   if (!result.canceled) for (const path of result.filePaths) openPath(path)
 }
 
+/** Merkt sich ein geöffnetes oder gespeichertes Dokument für „Zuletzt benutzt“. */
+function rememberRecent(path: string) {
+  // Auch in die Liste von macOS (Dock-Menü); das Menü baut MAID aus der eigenen.
+  app.addRecentDocument(path)
+  if (noteRecentDocument(path)) buildMenu()
+}
+
+/** Untermenü „Zuletzt benutzt“; gleichnamige Dateien bekommen ihren Ordner dazu. */
+function recentMenu(): MenuItemConstructorOptions[] {
+  const paths = recentDocuments()
+  const names = paths.map((p) => basename(p))
+  const items: MenuItemConstructorOptions[] = paths.map((path, i) => ({
+    label: names.indexOf(names[i]) === names.lastIndexOf(names[i]) ? names[i] : `${names[i]} – ${basename(dirname(path))}`,
+    toolTip: path,
+    click: () => openPath(path),
+  }))
+  if (items.length > 0) items.push({ type: 'separator' })
+  items.push({
+    label: 'Liste löschen',
+    enabled: paths.length > 0,
+    click: () => {
+      clearRecentDocuments()
+      app.clearRecentDocuments()
+      buildMenu()
+    },
+  })
+  return items
+}
+
 async function askDiscard(parent: BrowserWindow, name: string): Promise<DiscardChoice> {
   const { response } = await dialog.showMessageBox(parent, {
     type: 'warning',
@@ -172,7 +202,7 @@ function registerIpc() {
   ipcMain.handle(channels.read, async (_e, path: string): Promise<OpenedFile> => {
     const content = await readFile(path, 'utf8')
     const sidecar = await readOptional(path + SIDECAR_SUFFIX)
-    app.addRecentDocument(path)
+    rememberRecent(path)
     return { path, content, sidecar }
   })
 
@@ -185,7 +215,7 @@ function registerIpc() {
         if (err.code !== 'ENOENT') throw err
       })
     }
-    app.addRecentDocument(path)
+    rememberRecent(path)
   })
 
   ipcMain.handle(channels.confirmDiscard, (e, name: string) => askDiscard(senderWindow(e)!.win, name))
@@ -254,7 +284,7 @@ function buildMenu() {
       submenu: [
         { label: 'Neu', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
         { label: 'Öffnen …', accelerator: 'CmdOrCtrl+O', click: () => void showOpenDialog() },
-        { role: 'recentDocuments', label: 'Zuletzt benutzt', submenu: [{ role: 'clearRecentDocuments', label: 'Liste löschen' }] },
+        { label: 'Zuletzt benutzt', submenu: recentMenu() },
         { type: 'separator' },
         { label: 'Speichern', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
         { label: 'Speichern unter …', accelerator: 'Shift+CmdOrCtrl+S', click: () => send('saveAs') },

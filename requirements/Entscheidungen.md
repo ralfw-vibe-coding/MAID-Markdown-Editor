@@ -58,3 +58,9 @@ Alle Positionen sind UTF-16-Code-Unit-Offsets in den Markdown-Quelltext (wie JS-
 - Leere Bezeichnung beim Festhalten: Claude benennt die Fassung nach dem inhaltlichen Kern der Änderungen (Wirkung auf Aussage, Ton, Aufbau), nicht nach geänderten Wörtern.
 - **Automatische Fassungen** alle x Minuten (Einstellung, Standard 15, 0 = aus), nur wenn sich seit der letzten Fassung etwas geändert hat – als Protokoll des Schreibfortschritts. Sie erscheinen als hohle Punkte und „Automatisch festgehalten“; bewusst festgehaltene Fassungen sind die bedeutsamen.
 
+
+## E9 · „Zuletzt benutzt“ führt MAID selbst
+
+- macOS bindet die Liste zuletzt benutzter Dokumente an die Code-Signatur der App. Die installierte MAID ist ad hoc signiert; jeder neue Build hat eine andere Signatur, und macOS verwirft beim ersten Start die Liste (nachgewiesen: gleiche Bundle-ID, andere Signatur → Liste leer).
+- Deshalb führt MAID die Liste selbst in `recent.json` im Einstellungsordner (höchstens 10, neueste zuerst, nicht mehr vorhandene Dateien fallen weg) und baut daraus das Menü „Ablage → Zuletzt benutzt“. Gleichnamige Dateien bekommen ihren Ordner dazu.
+- Entwicklungsversion und installierte App teilen sich die Liste. Zusätzlich geht jedes Dokument weiter an macOS (Dock-Menü).
