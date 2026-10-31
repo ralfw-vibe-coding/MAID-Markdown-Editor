@@ -47,6 +47,6 @@ Alle Positionen sind UTF-16-Code-Unit-Offsets in den Markdown-Quelltext (wie JS-
 
 - „Ablage › Version sichern …“ (⌥⌘S) sichert den jetzigen Stand des Manuskripts mit einer Nachricht (wie eine Commit-Nachricht); Claude kann sie aus den Änderungen vorschlagen.
 - Versionen liegen in `<dokument>.md.versions.json` neben dem Dokument – getrennt von der Begleitdatei, damit ⌘S schnell bleibt. Volle Textstände, keine Deltas.
-- Reiter „Versionen“: Liste mit Nachricht, Zeit, +/− Wörter. Klick zeigt anstelle der Druckfahne einen absatzweisen, wortgenauen Vergleich („Seitdem“ bzw. „Diese Version“ gegenüber der vorherigen).
+- Eigene Spalte „Versionen“ (links, standardmäßig eingeklappt): oben sichern, darunter ein Zeitstrahl (maßstäblich bis „jetzt“), die Liste (Nachricht, Zeit, +/− Wörter) und für die gewählte Version ein absatzweiser, wortgenauer Vergleich („Seitdem“ bzw. „Diese Version“ gegenüber der vorherigen). Das KI-Panel bleibt bei Kommentaren und Chat, die Druckfahne bei der Druckfahne.
 - „Zurück zu dieser Version“ sichert den jetzigen Stand vorher automatisch (falls noch nicht gesichert) und ändert nur die abweichenden Zeilen – als ein Undo-Schritt; Kommentare in unveränderten Teilen bleiben verankert.
 - Bilder sind nur additiv: Der Bilderordner wird nie aufgeräumt, auch wenn eine neuere Version ein Bild nicht mehr verwendet. So findet jede alte Version ihre Bilder.
