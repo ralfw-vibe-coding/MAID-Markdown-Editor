@@ -498,10 +498,10 @@ export function App() {
       >
         {/* Weggeklappte Spalten bleiben im DOM, damit Editor, Entwürfe und Verlauf erhalten bleiben. */}
         <section className={`pane manuscript ${collapsed.editor ? 'collapsed' : ''}`}>
-          {collapsed.editor && <CollapsedStrip title="Manuskript" toward="right" onExpand={() => togglePane('editor')} />}
+          {collapsed.editor && <CollapsedStrip title="Manuskript" onExpand={() => togglePane('editor')} />}
           <h2>
             Manuskript
-            <CollapseButton toward="left" disabled={cannotCollapse(collapsed, 'editor')} onClick={() => togglePane('editor')} />
+            <CollapseButton disabled={cannotCollapse(collapsed, 'editor')} onClick={() => togglePane('editor')} />
           </h2>
           <div className="editor" ref={editorHost} />
         </section>
@@ -526,16 +526,16 @@ export function App() {
           }}
         />
         <section className={`pane ${collapsed.preview ? 'collapsed' : ''}`}>
-          {collapsed.preview && <CollapsedStrip title="Druckfahne" toward="left" onExpand={() => togglePane('preview')} />}
+          {collapsed.preview && <CollapsedStrip title="Druckfahne" onExpand={() => togglePane('preview')} />}
           <h2>
             Druckfahne
-            <CollapseButton toward="right" disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
+            <CollapseButton disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
           </h2>
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
         </section>
         <aside className={`pane threads ${activeId || panel === 'chat' ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>
           {collapsed.side && (
-            <CollapsedStrip title={panel === 'chat' ? 'Chat' : 'Kommentare'} toward="left" onExpand={() => togglePane('side')} />
+            <CollapsedStrip title={panel === 'chat' ? 'Chat' : 'Kommentare'} onExpand={() => togglePane('side')} />
           )}
           <div className="panel-tabs" role="tablist">
             <button role="tab" aria-selected={panel === 'comments'} className={panel === 'comments' ? 'active' : ''} onClick={() => setPanel('comments')}>
@@ -545,7 +545,7 @@ export function App() {
               <MessagesSquare size={14} /> Chat
               {chatBusy && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
-            <CollapseButton toward="right" disabled={cannotCollapse(collapsed, 'side')} onClick={() => togglePane('side')} />
+            <CollapseButton disabled={cannotCollapse(collapsed, 'side')} onClick={() => togglePane('side')} />
           </div>
           {panel === 'chat' ? (
             <ChatPanel

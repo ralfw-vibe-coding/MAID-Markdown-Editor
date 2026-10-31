@@ -55,9 +55,8 @@ export function gridColumns(c: Collapsed, split: number, splitterWidth: number, 
   return `${editor} ${both ? splitterWidth : 0}px ${preview} ${side}`
 }
 
-/** Chevron im Kopf einer offenen Spalte. */
-export function CollapseButton({ toward, disabled, onClick }: { toward: 'left' | 'right'; disabled: boolean; onClick: () => void }) {
-  const Icon = toward === 'left' ? ChevronLeft : ChevronRight
+/** Chevron im Kopf einer offenen Spalte – überall „>“, damit alle Spalten gleich aussehen. */
+export function CollapseButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
   return (
     <button
       className="icon pane-toggle"
@@ -66,17 +65,16 @@ export function CollapseButton({ toward, disabled, onClick }: { toward: 'left' |
       disabled={disabled}
       onClick={onClick}
     >
-      <Icon size={15} />
+      <ChevronRight size={15} />
     </button>
   )
 }
 
-/** Weggeklappte Spalte: schmaler Streifen mit senkrechtem Titel; Klick klappt auf. */
-export function CollapsedStrip({ title, toward, onExpand }: { title: string; toward: 'left' | 'right'; onExpand: () => void }) {
-  const Icon = toward === 'left' ? ChevronLeft : ChevronRight
+/** Weggeklappte Spalte: schmaler Streifen mit „<“ und senkrechtem Titel; Klick klappt auf. */
+export function CollapsedStrip({ title, onExpand }: { title: string; onExpand: () => void }) {
   return (
     <button className="pane-strip" title={`${title} aufklappen`} aria-label={`${title} aufklappen`} onClick={onExpand}>
-      <Icon size={15} />
+      <ChevronLeft size={15} />
       <span className="pane-strip-title">{title}</span>
     </button>
   )
