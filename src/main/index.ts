@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { channels, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
+import { channels, LEGACY_VERSIONS_SUFFIX, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
 import { askClaude, claudeInfo } from './ai'
 import { getSettings, updateSettings } from './settings'
 import { handleLocalFileScheme, registerLocalFileScheme, saveImage } from './images'
@@ -194,8 +194,15 @@ function registerIpc() {
   ipcMain.handle(channels.getSettings, () => getSettings())
   ipcMain.handle(channels.setSettings, (_e, changes: Partial<Settings>) => updateSettings(changes))
   ipcMain.handle(channels.claudeInfo, () => claudeInfo())
-  ipcMain.handle(channels.readVersions, (_e, documentPath: string) => readOptional(documentPath + VERSIONS_SUFFIX))
-  ipcMain.handle(channels.writeVersions, (_e, documentPath: string, content: string) => writeAtomic(documentPath + VERSIONS_SUFFIX, content))
+  // Fassungen unter altem Namen (.versions.json) werden gelesen und beim nächsten Schreiben ersetzt.
+  ipcMain.handle(
+    channels.readVersions,
+    async (_e, documentPath: string) => (await readOptional(documentPath + VERSIONS_SUFFIX)) ?? readOptional(documentPath + LEGACY_VERSIONS_SUFFIX),
+  )
+  ipcMain.handle(channels.writeVersions, async (_e, documentPath: string, content: string) => {
+    await writeAtomic(documentPath + VERSIONS_SUFFIX, content)
+    await unlink(documentPath + LEGACY_VERSIONS_SUFFIX).catch(() => {})
+  })
   ipcMain.handle(channels.saveImage, (_e, documentPath: string, data: Uint8Array, extension: string) => saveImage(documentPath, data, extension))
 
   ipcMain.on(channels.documentState, (e, state: DocumentState) => {

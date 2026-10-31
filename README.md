@@ -87,7 +87,7 @@ Bewusst festgehaltene Fassungen markieren, was dir etwas bedeutet; die automatis
 ```
 Vom Wert der Pause.md                    ← das Manuskript, reines Markdown
 Vom Wert der Pause.md.maid.json          ← Kommentare, Anker, Chats
-Vom Wert der Pause.md.versions.json      ← Fassungen
+Vom Wert der Pause.md.commits.json       ← Fassungen
 Vom Wert der Pause.md - Images/          ← eingefügte Bilder
 ```
 

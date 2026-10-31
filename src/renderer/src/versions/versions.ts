@@ -2,7 +2,7 @@ import { diffWords } from '../thread/diffWords'
 
 /**
  * Gesicherter Stand des Manuskripts mit Nachricht – wie ein Commit, aber ohne
- * git. Versionen liegen in `<dokument>.md.versions.json` neben dem Dokument.
+ * git. Versionen liegen in `<dokument>.md.commits.json` neben dem Dokument.
  */
 export type Version = {
   id: string

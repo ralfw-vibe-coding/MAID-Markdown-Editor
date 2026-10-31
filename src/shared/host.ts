@@ -95,8 +95,10 @@ export interface MaidHost {
 }
 
 export const SIDECAR_SUFFIX = '.maid.json'
-/** Versionen eines Dokuments liegen in `<datei>.versions.json` daneben. */
-export const VERSIONS_SUFFIX = '.versions.json'
+/** Fassungen eines Dokuments liegen in `<datei>.md.commits.json` daneben. */
+export const VERSIONS_SUFFIX = '.commits.json'
+/** Früherer Name der Fassungen-Datei; wird beim nächsten Festhalten ersetzt. */
+export const LEGACY_VERSIONS_SUFFIX = '.versions.json'
 
 /** Bilder eines Dokuments liegen neben ihm in „<datei>.md - Images“ – im Finder direkt unter der Datei. */
 export function imagesFolderName(documentFileName: string): string {
