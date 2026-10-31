@@ -117,6 +117,8 @@ function ChatView(props: Props & { chat: Chat }) {
             <div key={m.id} className="msg msg-error">
               {m.text}
             </div>
+          ) : m.kind === 'fassung' ? (
+            <MessageView key={m.id} m={m} canRevert={false} editedSince={false} onRevert={() => {}} />
           ) : (
             <MessageView
               key={m.id}

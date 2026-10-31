@@ -95,6 +95,8 @@ button.icon.danger.armed { color: #b91c1c; background: #fee2e2; }
 .msg-error { background: #fee2e2; color: #991b1b; font-size: 12px; }
 .msg-edit { border: 1px dashed var(--line); background: #fafaf9; font-size: 12px; }
 .msg-edit.reverted { opacity: .6; }
+.msg-fassung { display: flex; align-items: center; gap: 6px; align-self: center; padding: 2px 8px; color: var(--muted); font-size: 12px; white-space: normal; }
+.msg-fassung strong { color: var(--ink); font-weight: 500; }
 .edit-head { display: flex; justify-content: space-between; color: var(--muted); margin-bottom: 4px; }
 .diff { font-family: var(--preview-font); font-size: 13px; }
 .diff del { background: #fee2e2; color: #991b1b; }

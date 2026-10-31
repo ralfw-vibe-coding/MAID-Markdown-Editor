@@ -12,10 +12,13 @@ export type Message =
   /** Eine ausgeführte Änderung am Manuskript; `elsewhere`: nicht an der kommentierten Stelle. */
   | { id: string; kind: 'edit'; before: string; after: string; reverted: boolean; elsewhere?: boolean; at: string }
   | { id: string; kind: 'error'; text: string; at: string }
+  /** Claude hat eine Fassung festhalten lassen; `existing`: der Stand war schon festgehalten. */
+  | { id: string; kind: 'fassung'; title: string; existing?: boolean; at: string }
 
-type NewMessage =
+export type NewMessage =
   | { kind: 'user' | 'ai' | 'error'; text: string }
   | { kind: 'edit'; before: string; after: string; reverted?: boolean; elsewhere?: boolean }
+  | { kind: 'fassung'; title: string; existing?: boolean }
 
 export function message(m: NewMessage): Message {
   const base = { id: crypto.randomUUID(), at: new Date().toISOString() }

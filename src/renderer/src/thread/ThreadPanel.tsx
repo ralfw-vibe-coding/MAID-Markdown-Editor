@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { GitCommitHorizontal, X } from 'lucide-react'
 import { ConfirmDeleteButton } from '../layout/ConfirmDeleteButton'
 import type { Anchor } from '../anchor/anchors'
 import { diffWords } from './diffWords'
@@ -173,6 +173,15 @@ export function MessageView(props: { m: Message; canRevert: boolean; editedSince
       return <div className="msg msg-ai">{m.text}</div>
     case 'error':
       return <div className="msg msg-error">{m.text}</div>
+    case 'fassung':
+      return (
+        <div className="msg msg-fassung" title="Zu sehen in der Spalte „Fassungen“">
+          <GitCommitHorizontal size={13} />
+          <span>
+            {m.existing ? 'Stand war schon festgehalten' : 'Fassung festgehalten'}: <strong>{m.title}</strong>
+          </span>
+        </div>
+      )
     case 'edit':
       return (
         <div className={`msg msg-edit ${m.reverted ? 'reverted' : ''}`}>

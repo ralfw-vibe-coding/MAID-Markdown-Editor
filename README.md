@@ -46,6 +46,15 @@ Gehört eine besprochene Änderung an eine andere Stelle („füge das in Abschn
 - Auch im Chat ändert Claude nur **auf ausdrücklichen Auftrag** („kürz die Markierung“), an der Markierung, an der Cursorposition oder an einer eindeutigen Stelle – mit Diff und „Zurücknehmen“.
 - Es gibt beliebig viele Chats; Claude gibt jedem einen Titel aus dem Inhalt, du kannst ihn ändern. Alte Chats bleiben erhalten und lassen sich wieder öffnen.
 
+### Claude hält Fassungen fest
+
+In Kommentaren wie im Chat kann Claude selbst eine **Fassung festhalten** lassen:
+
+- auf Zuruf – „halte jetzt eine Fassung fest“; Claude gibt ihr eine Bezeichnung nach dem inhaltlichen Stand;
+- als Absicherung – sagst du z. B. „halte vor jeder größeren Änderung eine Fassung fest“, sichert Claude in diesem Gespräch vor größeren Umbauten den Stand („Vor dem Umschreiben des zweiten Absatzes“), bei Tippfehlern oder einzelnen Wörtern nicht.
+
+Die Fassung wird **vor** der Änderung festgehalten und erscheint im Verlauf als eigene Zeile sowie in der Fassungen-Spalte. Absicherungen vor einer Änderung zählen als automatische Fassungen (hohler Punkt im Zeitstrahl). Die Bitte gilt für das Gespräch, in dem du sie äußerst.
+
 ### Wie die KI angebunden ist
 
 MAID nutzt die lokal installierte **Claude CLI** (`claude -p`) – kein eigener API-Schlüssel, abgerechnet über dein Claude-Konto. Jeder Aufruf ist zustandslos: MAID schickt das aktuelle Dokument, die Stelle und den Verlauf mit; Claude arbeitet **ohne Werkzeuge und ohne Dateizugriff** und liefert eine strukturierte Antwort. Änderungen führt immer MAID selbst aus – nachdem geprüft ist, dass der Text an der Stelle noch so dasteht. Modell, Denkaufwand und Pfad zur CLI lassen sich in den Einstellungen wählen.

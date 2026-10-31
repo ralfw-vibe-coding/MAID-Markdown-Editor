@@ -56,7 +56,7 @@ import {
   toggleCollapsed,
   type PaneId,
 } from './layout/panes'
-import { appendMessage, createThread, message, syncEditStates, syncLastEdit, updateThread, type Message, type Thread } from './thread/thread'
+import { appendMessage, createThread, message, syncEditStates, syncLastEdit, updateThread, type Message, type NewMessage, type Thread } from './thread/thread'
 import { ThreadPanel } from './thread/ThreadPanel'
 import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
 import { minimalChange, planEdit } from './ai/planEdit'
@@ -379,6 +379,27 @@ export function App() {
     if (aiError) throw new Error(`Festgehalten, aber ohne Bezeichnung – Claude: ${aiError}`)
   }
 
+  /**
+   * Fassung auf Claudes Wunsch: hält den aktuellen Stand fest – vor einer
+   * Änderung (dann als automatische Fassung) oder auf Bitte des Autors.
+   * Liefert die Nachricht für den Verlauf.
+   */
+  async function holdFassungForAi(title: string, beforeEdit: boolean): Promise<NewMessage> {
+    const view = viewRef.current
+    const path = file.path
+    if (!view) return { kind: 'error', text: 'Fassung nicht festgehalten.' }
+    if (!path) return { kind: 'error', text: `Fassung „${title}“ nicht festgehalten – das Dokument hat noch keinen Dateinamen (⌘S).` }
+    const text = view.state.doc.toString()
+    const latest = versionsRef.current.versions.at(-1)
+    if (latest?.text === text) return { kind: 'fassung', title: latest.message || title, existing: true }
+    try {
+      await versions.add(path, text, title, beforeEdit)
+      return { kind: 'fassung', title }
+    } catch (err) {
+      return { kind: 'error', text: `Fassung nicht festgehalten: ${(err as Error).message}` }
+    }
+  }
+
   // Automatische Fassungen: alle x Minuten, wenn sich seit der letzten Fassung etwas geändert hat –
   // ein Protokoll des Schreibfortschritts. Gezählt wird ab der letzten Fassung bzw. ab dem Öffnen.
   const versionsRef = useRef(versions)
@@ -589,6 +610,8 @@ export function App() {
       if (!result.ok) return appendTo(id, { kind: 'error', text: result.error })
       const answer = parseAnswer(result.data)
       appendTo(id, { kind: 'ai', text: answer.reply })
+      // Erst festhalten, dann ändern – die Fassung ist der Stand vor der Änderung.
+      if (answer.fassung) appendTo(id, await holdFassungForAi(answer.fassung, !!answer.edit))
       if (answer.edit) {
         const done = replaceAtAnchor(id, answer.edit.oldText, answer.edit.newText)
         appendTo(
@@ -750,6 +773,7 @@ export function App() {
       if (!result.ok) return appendToChat(id, message({ kind: 'error', text: result.error }))
       const answer = parseChatAnswer(result.data)
       setChats((cs) => updateChat(cs, id, (c) => suggestTitle({ ...c, messages: [...c.messages, message({ kind: 'ai', text: answer.reply })] }, answer.title)))
+      if (answer.fassung) appendToChat(id, message(await holdFassungForAi(answer.fassung, !!answer.edit)))
       if (answer.edit) {
         const { oldText, newText } = answer.edit
         const done = applyChatEdit(oldText, newText, chatFocusRef.current.get(id) ?? null)

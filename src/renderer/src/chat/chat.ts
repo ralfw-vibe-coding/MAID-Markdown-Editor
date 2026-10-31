@@ -1,4 +1,5 @@
 import type { Message } from '../thread/thread'
+import { FASSUNG_RULES, FASSUNG_SCHEMA_PROPERTY, parseFassung } from '../ai/fassung'
 
 /**
  * Freier Chat mit Claude über das ganze Dokument. Auf ausdrücklichen Auftrag
@@ -18,7 +19,8 @@ Regeln:
   - Sonst ist "oldText" ein exakter Ausschnitt aus dem Markdown-Quelltext, der im ganzen Dokument genau einmal vorkommt (lieber ein ganzer Satz als ein Wort); "newText" ersetzt ihn vollständig.
   - Markdown-Auszeichnungen müssen in "newText" ausgeglichen sein. Ändere nichts, was nicht verlangt wurde.
   - In "reply" sagst du kurz, was du geändert hast.
-- Ist unklar, was geändert werden soll, frage nach statt zu raten ("edit": false).`
+- Ist unklar, was geändert werden soll, frage nach statt zu raten ("edit": false).
+${FASSUNG_RULES}`
 
 export const CHAT_SCHEMA = {
   type: 'object',
@@ -29,13 +31,14 @@ export const CHAT_SCHEMA = {
     oldText: { type: 'string', description: 'Exakter zu ersetzender Markdown-Ausschnitt oder leer' },
     newText: { type: 'string', description: 'Ersatztext in Markdown oder leer' },
     title: { type: 'string', description: 'Kurzer Titel für dieses Gespräch (2–5 Wörter, ohne Anführungszeichen)' },
+    fassung: FASSUNG_SCHEMA_PROPERTY,
   },
-  required: ['reply', 'edit', 'oldText', 'newText', 'title'],
+  required: ['reply', 'edit', 'oldText', 'newText', 'title', 'fassung'],
 }
 
 export type EditorFocus = { from: number; to: number }
 
-export type ChatAnswer = { reply: string; edit: { oldText: string; newText: string } | null; title?: string }
+export type ChatAnswer = { reply: string; edit: { oldText: string; newText: string } | null; title?: string; fassung: string | null }
 
 function focusDescription(doc: string, focus: EditorFocus | null): string {
   if (!focus) return 'Keine Angabe zur Cursorposition.'
@@ -60,6 +63,8 @@ function transcript(messages: Message[]): string {
           return `[Änderung ${m.reverted ? 'wurde wieder zurückgenommen' : 'ausgeführt'}: „${m.before}“ → „${m.after}“]`
         case 'error':
           return `[Hinweis: ${m.text}]`
+        case 'fassung':
+          return `[Fassung festgehalten: „${m.title}“]`
       }
     })
     .join('\n\n')
@@ -83,8 +88,8 @@ export function buildChatPrompt(input: { doc: string; focus: EditorFocus | null;
 }
 
 export function parseChatAnswer(data: unknown): ChatAnswer {
-  const d = data as { reply?: unknown; edit?: unknown; oldText?: unknown; newText?: unknown; title?: unknown }
+  const d = data as { reply?: unknown; edit?: unknown; oldText?: unknown; newText?: unknown; title?: unknown; fassung?: unknown }
   if (typeof d?.reply !== 'string') throw new Error('Unerwartete Antwort der KI')
   const edit = d.edit === true && typeof d.newText === 'string' ? { oldText: String(d.oldText ?? ''), newText: d.newText } : null
-  return { reply: d.reply, edit, title: typeof d.title === 'string' ? d.title : undefined }
+  return { reply: d.reply, edit, title: typeof d.title === 'string' ? d.title : undefined, fassung: parseFassung(d.fassung) }
 }

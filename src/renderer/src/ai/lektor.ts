@@ -1,4 +1,5 @@
 import type { Message } from '../thread/thread'
+import { FASSUNG_RULES, FASSUNG_SCHEMA_PROPERTY, parseFassung } from './fassung'
 
 /** Markiert die besprochene Stelle im Dokument, das die KI sieht. */
 export const MARK_START = '⟦'
@@ -10,6 +11,8 @@ export type AskMode = 'discuss' | 'execute'
 export type LektorAnswer = {
   reply: string
   edit: { oldText: string; newText: string } | null
+  /** Bezeichnung einer Fassung, die vor der Änderung festgehalten werden soll. */
+  fassung: string | null
 }
 
 export const SYSTEM_PROMPT = `Du bist ein erfahrener, freundlicher Lektor. Du arbeitest mit einem Autor an einem Markdown-Dokument.
@@ -26,7 +29,8 @@ Regeln:
   - An einer Einfügemarke: "oldText" leer lassen, um "newText" genau dort einzufügen (achte auf passende Leerzeichen und Leerzeilen am Anfang/Ende von "newText"), oder einen kurzen Ausschnitt angeben, der direkt an die Marke grenzt.
   - Markdown-Auszeichnungen (**, *, [](), \`) müssen in "newText" vollständig und ausgeglichen sein.
   - In "reply" sagst du in einem Satz, was du geändert hast.
-- Ist unklar, welche Änderung gemeint ist, frage nach statt zu raten ("edit": false).`
+- Ist unklar, welche Änderung gemeint ist, frage nach statt zu raten ("edit": false).
+${FASSUNG_RULES}`
 
 export const RESPONSE_SCHEMA = {
   type: 'object',
@@ -36,8 +40,9 @@ export const RESPONSE_SCHEMA = {
     edit: { type: 'boolean', description: 'true, wenn jetzt eine Änderung ausgeführt werden soll' },
     oldText: { type: 'string', description: 'Exakter zu ersetzender Markdown-Ausschnitt oder leer' },
     newText: { type: 'string', description: 'Ersatztext in Markdown oder leer' },
+    fassung: FASSUNG_SCHEMA_PROPERTY,
   },
-  required: ['reply', 'edit', 'oldText', 'newText'],
+  required: ['reply', 'edit', 'oldText', 'newText', 'fassung'],
 }
 
 function transcript(messages: Message[]): string {
@@ -52,6 +57,8 @@ function transcript(messages: Message[]): string {
           return `[Änderung ${m.reverted ? 'wurde wieder zurückgenommen' : 'ausgeführt'}${m.elsewhere ? ' (an anderer Stelle)' : ''}: „${m.before}“ → „${m.after}“]`
         case 'error':
           return `[Hinweis: ${m.text}]`
+        case 'fassung':
+          return `[Fassung festgehalten: „${m.title}“]`
       }
     })
     .join('\n\n')
@@ -89,10 +96,10 @@ export function buildPrompt(input: { doc: string; from: number; to: number; poin
 const stripMarks = (s: string) => s.replaceAll(MARK_START, '').replaceAll(MARK_END, '')
 
 export function parseAnswer(data: unknown): LektorAnswer {
-  const d = data as { reply?: unknown; edit?: unknown; oldText?: unknown; newText?: unknown }
+  const d = data as { reply?: unknown; edit?: unknown; oldText?: unknown; newText?: unknown; fassung?: unknown }
   if (typeof d?.reply !== 'string') throw new Error('Unerwartete Antwort der KI')
   const edit = d.edit === true && typeof d.newText === 'string'
     ? { oldText: stripMarks(String(d.oldText ?? '')), newText: stripMarks(d.newText) }
     : null
-  return { reply: d.reply, edit }
+  return { reply: d.reply, edit, fassung: parseFassung(d.fassung) }
 }

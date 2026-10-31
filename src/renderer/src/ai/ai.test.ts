@@ -29,6 +29,11 @@ describe('Prompt für den Lektor', () => {
   it('ohne Auftrag keine Änderung', () => {
     expect(parseAnswer({ reply: 'Vorschlag: „sehr wahrscheinlich“', edit: false, oldText: '', newText: '' }).edit).toBeNull()
   })
+
+  it('Fassung auf Wunsch, auch ohne Änderung', () => {
+    expect(parseAnswer({ reply: 'Halte fest.', edit: false, oldText: '', newText: '', fassung: 'Erster Entwurf komplett' }).fassung).toBe('Erster Entwurf komplett')
+    expect(parseAnswer({ reply: 'ok', edit: false, oldText: '', newText: '' }).fassung).toBeNull()
+  })
 })
 
 describe('Änderung planen', () => {
