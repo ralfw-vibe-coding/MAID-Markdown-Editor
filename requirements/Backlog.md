@@ -9,3 +9,4 @@ Wünsche und Punkte, die noch nicht eingeplant sind, aber nicht verloren gehen s
 - **KI-Kontext begrenzen:** Bei sehr langen Dokumenten nur Abschnitt + Gliederung mitschicken; sichtbar machen, was die KI sieht.
 - **Mehrere Änderungsvorschläge:** Varianten im Thread anbieten und eine davon übernehmen.
 - **Einfügemarke in der Druckfahne:** Threads an einer Einfügemarke sind bisher nur im Manuskript markiert, nicht in der Druckfahne.
+- **Windows:** Bildpfade (`C:\…` im `maid-file`-Protokoll, `/` statt `\` im Markdown), Claude CLI als `claude.exe` finden, Menü ohne macOS-App-Menü, nur eine Instanz und Dateien per `second-instance` übergeben, ⌘/⌥ in der Oberfläche als Strg/Alt anzeigen, NSIS-Installer mit `.ico` und Dateizuordnung für `.md`/`.markdown`. Test braucht einen Windows-Rechner oder eine VM.
