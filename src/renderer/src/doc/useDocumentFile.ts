@@ -95,7 +95,8 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load 
     setKeepSidecar(sidecarBroken)
   }
 
-  const actions: Record<MenuCommand, () => Promise<unknown>> = {
+  // Nur die Datei-Befehle; die übrigen Menübefehle behandelt die App selbst.
+  const actions: Partial<Record<MenuCommand, () => Promise<unknown>>> = {
     new: newDocument,
     open: () => open(),
     save: () => save(),
@@ -113,7 +114,10 @@ export function useDocumentFile({ host, initialDoc, doc, anchors, threads, load 
 
   useEffect(() => {
     if (!host) return
-    const offMenu = host.onMenu((command) => run(latest.current.actions[command]))
+    const offMenu = host.onMenu((command) => {
+      const action = latest.current.actions[command]
+      if (action) run(action)
+    })
     const offOpen = host.onOpenPath((p) => run(() => latest.current.open(p)))
     host.ready()
     return () => {

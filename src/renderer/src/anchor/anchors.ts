@@ -1,5 +1,5 @@
 import { StateEffect, StateField, type Text } from '@codemirror/state'
-import { Decoration, EditorView } from '@codemirror/view'
+import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import { invertedEffects } from '@codemirror/commands'
 
 /**
@@ -14,6 +14,11 @@ export type Anchor = {
   id: string
   from: number
   to: number
+  /**
+   * Einfügemarke statt Textbereich (from === to), z. B. die Cursorposition
+   * oder das Textende. Eine Einfügemarke geht durch Löschungen nicht verloren.
+   */
+  point?: boolean
   /** Wortlaut zum Zeitpunkt der Markierung bzw. der letzten bestätigten Änderung. */
   quote: string
   prefix: string
@@ -28,6 +33,7 @@ export function createAnchor(doc: Text, from: number, to: number): Anchor {
     id: crypto.randomUUID(),
     from,
     to,
+    ...(from === to ? { point: true } : {}),
     quote: doc.sliceString(from, to),
     prefix: doc.sliceString(Math.max(0, from - CONTEXT), from),
     suffix: doc.sliceString(to, Math.min(doc.length, to + CONTEXT)),
@@ -35,12 +41,15 @@ export function createAnchor(doc: Text, from: number, to: number): Anchor {
   }
 }
 
+/** Hat der Anker eine Stelle im Dokument (Textbereich oder Einfügemarke)? */
+export const isPlaced = (a: Anchor) => a.from < a.to || !!a.point
+
 export const addAnchor = StateEffect.define<Anchor>()
 export const removeAnchor = StateEffect.define<string>()
 /** Ersetzt alle Anker, z. B. nach dem Öffnen eines Dokuments. */
 export const setAnchors = StateEffect.define<Anchor[]>()
 
-type AnchorPlacement = { id: string; from: number; to: number; quote: string; status: AnchorStatus }
+type AnchorPlacement = { id: string; from: number; to: number; point?: boolean; quote: string; status: AnchorStatus }
 
 /**
  * Setzt einen Anker explizit, z. B. auf den Ersatztext einer KI-Änderung.
@@ -48,12 +57,28 @@ type AnchorPlacement = { id: string; from: number; to: number; quote: string; st
  * also auf das Dokument nach der Änderung.
  */
 export const placeAnchor = StateEffect.define<AnchorPlacement>({
-  map: (v, changes) => ({ ...v, from: changes.mapPos(v.from, 1), to: Math.max(changes.mapPos(v.from, 1), changes.mapPos(v.to, -1)) }),
+  map: (v, changes) => {
+    const from = changes.mapPos(v.from, v.point ? -1 : 1)
+    return { ...v, from, to: v.point ? from : Math.max(from, changes.mapPos(v.to, -1)) }
+  },
 })
+
+class PointMarker extends WidgetType {
+  eq() {
+    return true
+  }
+  toDOM() {
+    const el = document.createElement('span')
+    el.className = 'cm-anchor-point'
+    el.title = 'Kommentar an dieser Stelle'
+    return el
+  }
+}
 
 /**
  * Hält die Anker im Editorzustand, damit jede Transaktion sie automatisch
- * mitführt. Einfügungen direkt am Rand erweitern den Anker nicht.
+ * mitführt. Einfügungen direkt am Rand erweitern den Anker nicht; an einer
+ * Einfügemarke Getipptes steht hinter der Marke.
  */
 export const anchorField = StateField.define<Anchor[]>({
   create: () => [],
@@ -61,6 +86,10 @@ export const anchorField = StateField.define<Anchor[]>({
     let next = anchors
     if (tr.docChanged) {
       next = next.map((a) => {
+        if (a.point) {
+          const at = tr.changes.mapPos(a.from, -1)
+          return { ...a, from: at, to: at }
+        }
         const from = tr.changes.mapPos(a.from, 1)
         const to = Math.max(from, tr.changes.mapPos(a.to, -1))
         const status: AnchorStatus =
@@ -74,7 +103,11 @@ export const anchorField = StateField.define<Anchor[]>({
       else if (e.is(removeAnchor)) next = next.filter((a) => a.id !== e.value)
       else if (e.is(placeAnchor)) {
         const p = e.value
-        next = next.map((a) => (a.id === p.id ? { ...a, from: p.from, to: p.to, quote: p.quote, status: p.status } : a))
+        next = next.map((a) => {
+          if (a.id !== p.id) return a
+          const { point: _old, ...rest } = a
+          return { ...rest, ...(p.point ? { point: true } : {}), from: p.from, to: p.to, quote: p.quote, status: p.status }
+        })
       }
     }
     return next
@@ -83,8 +116,12 @@ export const anchorField = StateField.define<Anchor[]>({
     EditorView.decorations.from(field, (anchors) =>
       Decoration.set(
         anchors
-          .filter((a) => a.from < a.to)
-          .map((a) => Decoration.mark({ class: `cm-anchor cm-anchor-${a.status}` }).range(a.from, a.to)),
+          .filter(isPlaced)
+          .map((a) =>
+            a.point
+              ? Decoration.widget({ widget: new PointMarker(), side: -1 }).range(a.from)
+              : Decoration.mark({ class: `cm-anchor cm-anchor-${a.status}` }).range(a.from, a.to),
+          ),
         true,
       ),
     ),
@@ -107,7 +144,7 @@ export const anchorHistory = invertedEffects.of((tr) => {
     const emptied = old.from < old.to && now.from === now.to
     if (placed || emptied) {
       // Positionen im Dokument vor der Transaktion = nach dem Rückgängigmachen.
-      restore.push(placeAnchor.of({ id: old.id, from: old.from, to: old.to, quote: old.quote, status: old.status }))
+      restore.push(placeAnchor.of({ id: old.id, from: old.from, to: old.to, point: old.point, quote: old.quote, status: old.status }))
     }
   }
   return restore

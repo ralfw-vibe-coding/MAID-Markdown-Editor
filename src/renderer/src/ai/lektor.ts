@@ -14,6 +14,7 @@ export type LektorAnswer = {
 
 export const SYSTEM_PROMPT = `Du bist ein erfahrener, freundlicher Lektor. Du arbeitest mit einem Autor an einem Markdown-Dokument.
 Der Autor hat eine Stelle im Dokument markiert und kommentiert; ihr sprecht im Thread darüber.
+Statt einer Textstelle kann es auch eine Einfügemarke sein (${MARK_START}${MARK_END} ohne Text dazwischen): Dort steht der Cursor des Autors, z. B. am Textende oder zwischen zwei Absätzen.
 
 Regeln:
 - Antworte in der Sprache des Autors, knapp und konkret (meist 1–4 Sätze). Formulierungsvorschläge setzt du in Anführungszeichen.
@@ -21,6 +22,7 @@ Regeln:
 - Wenn du änderst ("edit": true):
   - "oldText" ist ein exakter, zusammenhängender Ausschnitt aus dem Markdown-Quelltext – ohne die Markierungszeichen ${MARK_START} ${MARK_END}. Er enthält die markierte Stelle oder überlappt sie. Halte ihn so kurz wie möglich: in der Regel genau die markierte Stelle, bei Bedarf bis zum ganzen Satz erweitert.
   - "newText" ersetzt "oldText" vollständig. Ändere nichts, was nicht besprochen wurde.
+  - An einer Einfügemarke: "oldText" leer lassen, um "newText" genau dort einzufügen (achte auf passende Leerzeichen und Leerzeilen am Anfang/Ende von "newText"), oder einen kurzen Ausschnitt angeben, der direkt an die Marke grenzt.
   - Markdown-Auszeichnungen (**, *, [](), \`) müssen in "newText" vollständig und ausgeglichen sein.
   - In "reply" sagst du in einem Satz, was du geändert hast.
 - Ist unklar, welche Änderung gemeint ist, frage nach statt zu raten ("edit": false).`
@@ -56,8 +58,8 @@ function transcript(messages: Message[]): string {
     .join('\n\n')
 }
 
-export function buildPrompt(input: { doc: string; from: number; to: number; messages: Message[]; mode: AskMode }): string {
-  const { doc, from, to, messages, mode } = input
+export function buildPrompt(input: { doc: string; from: number; to: number; point?: boolean; messages: Message[]; mode: AskMode }): string {
+  const { doc, from, to, point, messages, mode } = input
   const marked = doc.slice(0, from) + MARK_START + doc.slice(from, to) + MARK_END + doc.slice(to)
   const task =
     mode === 'execute'
@@ -68,10 +70,14 @@ export function buildPrompt(input: { doc: string; from: number; to: number; mess
     marked,
     '</dokument>',
     '',
-    `Die besprochene Stelle (im Dokument zwischen ${MARK_START} und ${MARK_END}):`,
-    '<stelle>',
-    doc.slice(from, to),
-    '</stelle>',
+    ...(point
+      ? [
+          `Besprochen wird eine Einfügemarke (Cursorposition, im Dokument als ${MARK_START}${MARK_END}). Kontext:`,
+          '<stelle>',
+          `…${doc.slice(Math.max(0, from - 200), from)}${MARK_START}${MARK_END}${doc.slice(to, to + 200)}…`,
+          '</stelle>',
+        ]
+      : [`Die besprochene Stelle (im Dokument zwischen ${MARK_START} und ${MARK_END}):`, '<stelle>', doc.slice(from, to), '</stelle>']),
     '',
     '<verlauf>',
     transcript(messages),

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { basicSetup } from 'codemirror'
 import { EditorState, type Extension } from '@codemirror/state'
-import { EditorView } from '@codemirror/view'
+import { EditorView, keymap } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
 import type { MaidHost } from '../../shared/host'
 import { buildPreview } from './render/buildPreview'
@@ -12,6 +12,7 @@ import {
   anchorField,
   anchorHistory,
   createAnchor,
+  isPlaced,
   placeAnchor,
   removeAnchor,
   setAnchors as setAnchorsEffect,
@@ -20,6 +21,8 @@ import {
 import { sampleDoc } from './sampleDoc'
 import { markdownKeymap } from './editor/markdownKeymap'
 import { useDocumentFile } from './doc/useDocumentFile'
+import { useSettings } from './settings/useSettings'
+import { SettingsDialog } from './settings/SettingsDialog'
 import { appendMessage, createThread, message, syncEditStates, updateThread, type Thread } from './thread/thread'
 import { ThreadPanel } from './thread/ThreadPanel'
 import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
@@ -71,6 +74,8 @@ export function App() {
   const [threads, setThreads] = useState<Thread[]>([])
   /** Threads, in denen gerade eine KI-Anfrage läuft. */
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
+  const { settings, update: updateSettings } = useSettings(host)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [pending, setPending] = useState<Pending | null>(null)
   const [draft, setDraft] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -83,7 +88,7 @@ export function App() {
     setThreads((ts) =>
       syncEditStates(ts, (id) => {
         const a = anchors.find((x) => x.id === id)
-        return a && a.from < a.to ? doc.slice(a.from, a.to) : null
+        return a && isPlaced(a) ? doc.slice(a.from, a.to) : null
       }),
     )
   }, [anchors, doc])
@@ -100,6 +105,8 @@ export function App() {
       EditorView.lineWrapping,
       anchorField,
       anchorHistory,
+      // In der App kommt ⇧⌘K über das Menü; im Browser direkt im Editor.
+      host ? [] : keymap.of([{ key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) }]),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) setDoc(u.state.doc.toString())
         const next = u.state.field(anchorField)
@@ -198,7 +205,8 @@ export function App() {
     const change = minimalChange(text, plan)
     view.dispatch({
       changes: { from: change.from, to: change.to, insert: change.insert },
-      effects: placeAnchor.of({ id, from: plan.from, to: plan.from + newText.length, quote: newText, status: 'ok' }),
+      // Wird der Text ganz entfernt (z. B. Rücknahme einer Einfügung), bleibt eine Einfügemarke.
+      effects: placeAnchor.of({ id, from: plan.from, to: plan.from + newText.length, point: newText === '', quote: newText, status: 'ok' }),
       userEvent: 'input.maid',
     })
     return { before: text.slice(plan.from, plan.to) }
@@ -212,7 +220,14 @@ export function App() {
     if (!view || !anchor || !thread) return
     setBusy((b) => new Set(b).add(id))
     try {
-      const prompt = buildPrompt({ doc: view.state.doc.toString(), from: anchor.from, to: anchor.to, messages: thread.messages, mode })
+      const prompt = buildPrompt({
+        doc: view.state.doc.toString(),
+        from: anchor.from,
+        to: anchor.to,
+        point: anchor.point,
+        messages: thread.messages,
+        mode,
+      })
       const result = await host.askAi({ prompt, systemPrompt: SYSTEM_PROMPT, schema: RESPONSE_SCHEMA })
       if (!result.ok) return appendTo(id, { kind: 'error', text: result.error })
       const answer = parseAnswer(result.data)
@@ -252,8 +267,48 @@ export function App() {
   function removeThread(id: string) {
     viewRef.current?.dispatch({ effects: removeAnchor.of(id) })
     setThreads((ts) => ts.filter((t) => t.id !== id))
+    threadsRef.current = threadsRef.current.filter((t) => t.id !== id)
     if (activeId === id) setActiveId(null)
   }
+
+  /** Ein geöffneter Thread ohne jede Nachricht wird beim Verlassen verworfen. */
+  function discardIfEmpty(id: string | null) {
+    if (id && threadsRef.current.find((t) => t.id === id)?.messages.length === 0) removeThread(id)
+  }
+
+  function closeChat() {
+    discardIfEmpty(activeId)
+    setActiveId(null)
+  }
+
+  /**
+   * Neuer Thread an der Auswahl im Manuskript – ohne Auswahl an einer
+   * Einfügemarke an der Cursorposition. Der Chat öffnet sich leer.
+   */
+  function threadFromEditor() {
+    const view = viewRef.current
+    if (!view) return
+    discardIfEmpty(activeId)
+    const { from, to } = view.state.selection.main
+    const anchor = createAnchor(view.state.doc, from, to)
+    view.dispatch({ effects: addAnchor.of(anchor) })
+    const thread = createThread(anchor.id)
+    setThreads((ts) => [...ts, thread])
+    threadsRef.current = [...threadsRef.current, thread]
+    setPending(null)
+    setActiveId(anchor.id)
+  }
+  const threadFromEditorRef = useRef(threadFromEditor)
+  threadFromEditorRef.current = threadFromEditor
+
+  useEffect(
+    () =>
+      host?.onMenu((command) => {
+        if (command === 'askAi') threadFromEditorRef.current()
+        if (command === 'settings') setSettingsOpen(true)
+      }),
+    [],
+  )
 
   function onSplitterMove(e: PointerEvent<HTMLDivElement>) {
     const main = mainRef.current
@@ -264,11 +319,12 @@ export function App() {
   }
 
   function focusThread(id: string) {
+    if (activeId !== id) discardIfEmpty(activeId)
     const a = currentAnchor(id)
     setActiveId(id)
     if (!a) return
     const view = viewRef.current
-    if (view && a.from < a.to) {
+    if (view && isPlaced(a)) {
       view.dispatch({ selection: { anchor: a.from, head: a.to }, scrollIntoView: true })
     }
     const root = previewRef.current
@@ -342,7 +398,7 @@ export function App() {
             busy={busy}
             aiAvailable={!!host}
             onOpen={focusThread}
-            onClose={() => setActiveId(null)}
+            onClose={closeChat}
             onSend={send}
             onExecute={(id) => void askAi(id, 'execute')}
             onRevert={revert}
@@ -350,6 +406,10 @@ export function App() {
           />
         </aside>
       </main>
+
+      {settingsOpen && (
+        <SettingsDialog host={host} settings={settings} onChange={updateSettings} onClose={() => setSettingsOpen(false)} />
+      )}
 
       {pending && (
         <div className="popover" style={{ left: pending.x, top: pending.y }}>

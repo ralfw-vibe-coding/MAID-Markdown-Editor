@@ -12,9 +12,30 @@ export type StoredAnchor = {
   prefix: string
   suffix: string
   status: AnchorStatus
+  /** Einfügemarke statt Textbereich. */
+  point?: boolean
 }
 
 export type Placement = { from: number; to: number; status: AnchorStatus }
+
+/**
+ * Einfügemarke wiederfinden: zwischen unverändertem Präfix und Suffix, sonst
+ * hinter einem eindeutigen Präfix bzw. vor einem eindeutigen Suffix.
+ */
+function reanchorPoint(doc: string, a: StoredAnchor, documentUnchanged: boolean): Placement {
+  if (documentUnchanged) return { from: a.from, to: a.from, status: 'ok' }
+  const at = (pos: number): Placement => ({ from: pos, to: pos, status: 'ok' })
+  const both = indexesOf(doc, a.prefix + a.suffix)
+  if (both.length === 1) return at(both[0] + a.prefix.length)
+  if (a.prefix === '' && doc.startsWith(a.suffix)) return at(0)
+  if (a.suffix === '' && doc.endsWith(a.prefix)) return at(doc.length)
+  const pre = a.prefix.length >= MIN_CONTEXT ? indexesOf(doc, a.prefix) : []
+  if (pre.length === 1) return at(pre[0] + a.prefix.length)
+  const suf = a.suffix.length >= MIN_CONTEXT ? indexesOf(doc, a.suffix) : []
+  if (suf.length === 1) return at(suf[0])
+  const lost = Math.min(a.from, doc.length)
+  return { from: lost, to: lost, status: 'verloren' }
+}
 
 /** Mindestlänge des Kontexts, um einen geänderten Text über Präfix/Suffix einzukreisen. */
 const MIN_CONTEXT = 8
@@ -52,6 +73,7 @@ export function reanchor(doc: string, a: StoredAnchor, documentUnchanged: boolea
     const at = Math.min(a.from, doc.length)
     return { from: at, to: at, status: 'verloren' }
   }
+  if (a.point && a.status !== 'verloren') return reanchorPoint(doc, a, documentUnchanged)
   if (a.status === 'verloren' || a.text.length === 0) return lost()
 
   if (documentUnchanged && doc.slice(a.from, a.to) === a.text) {

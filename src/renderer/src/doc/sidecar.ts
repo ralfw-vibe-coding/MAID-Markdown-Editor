@@ -51,6 +51,7 @@ export function serializeSidecar(doc: string, anchors: Anchor[], threads: Thread
         prefix: doc.slice(Math.max(0, a.from - CONTEXT), a.from),
         suffix: doc.slice(a.to, a.to + CONTEXT),
         status: a.status,
+        ...(a.point ? { point: true } : {}),
       },
       messages: t.messages,
     })
@@ -88,6 +89,7 @@ export function restoreThreads(doc: string, sidecar: Sidecar, hash: string): { a
     return {
       id: t.id,
       ...placed,
+      ...(t.anchor.point && placed.status !== 'verloren' ? { point: true } : {}),
       quote: t.anchor.quote,
       prefix: doc.slice(Math.max(0, placed.from - CONTEXT), placed.from),
       suffix: doc.slice(placed.to, placed.to + CONTEXT),

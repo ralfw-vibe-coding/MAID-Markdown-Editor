@@ -7,6 +7,11 @@
   --accent: #c2410c;
   --anchor: rgba(250, 204, 21, 0.35);
   --anchor-active: rgba(249, 115, 22, 0.45);
+  /* Schriften – überschrieben aus den Einstellungen */
+  --editor-font: ui-monospace, Menlo, monospace;
+  --editor-size: 14px;
+  --preview-font: Georgia, 'Times New Roman', serif;
+  --preview-size: 17px;
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   color: var(--ink);
   background: var(--bg);
@@ -36,11 +41,13 @@ main.dragging { cursor: col-resize; user-select: none; }
 }
 
 .editor { flex: 1; }
-.editor .cm-editor { height: 100%; font-size: 14px; }
+.editor .cm-editor { height: 100%; font-size: var(--editor-size); }
+.editor .cm-scroller { font-family: var(--editor-font); }
 .editor .cm-anchor { background: var(--anchor); }
 .editor .cm-anchor-geändert { background: rgba(147, 197, 253, .45); }
+.editor .cm-anchor-point { display: inline-block; width: 2px; height: 1.1em; margin: 0 1px; vertical-align: text-bottom; background: var(--accent); border-radius: 1px; }
 
-.preview { padding: 16px 28px 80px; background: var(--paper); font-family: Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 1.6; flex: 1; }
+.preview { padding: 16px 28px 80px; background: var(--paper); font-family: var(--preview-font); font-size: var(--preview-size); line-height: 1.6; flex: 1; }
 .preview table { border-collapse: collapse; }
 .preview th, .preview td { border: 1px solid var(--line); padding: 4px 10px; }
 .preview blockquote { margin-left: 0; padding-left: 16px; border-left: 3px solid var(--line); color: #4b4740; }
@@ -58,7 +65,7 @@ main.dragging { cursor: col-resize; user-select: none; }
 .threads { padding-bottom: 24px; border-right: none; }
 .threads-empty { padding: 0 16px; font-size: 13px; }
 .thread { margin: 10px 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); cursor: pointer; font-size: 13px; }
-.thread blockquote, .chat blockquote { margin: 6px 0; padding-left: 8px; border-left: 3px solid var(--anchor-active); font-family: Georgia, serif; }
+.thread blockquote, .chat blockquote { margin: 6px 0; padding-left: 8px; border-left: 3px solid var(--anchor-active); font-family: var(--preview-font); }
 .thread blockquote.anchor-verloren, .chat blockquote.anchor-verloren { border-left-color: #fca5a5; color: var(--muted); text-decoration: line-through; }
 .thread blockquote.anchor-geändert, .chat blockquote.anchor-geändert { border-left-color: #93c5fd; }
 .thread .snippet { margin: 4px 0; color: #4b4740; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -76,6 +83,7 @@ button.icon.danger:hover { color: #b91c1c; background: #fee2e2; }
 .status { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #ecfccb; color: #3f6212; }
 .status-geändert { background: #dbeafe; color: #1e40af; }
 .status-verloren { background: #fee2e2; color: #991b1b; }
+.status-point { background: #ffedd5; color: #9a3412; }
 
 .messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 8px -4px; padding: 0 4px; }
 .messages > .msg { flex-shrink: 0; }
@@ -87,7 +95,7 @@ button.icon.danger:hover { color: #b91c1c; background: #fee2e2; }
 .msg-edit { border: 1px dashed var(--line); background: #fafaf9; font-size: 12px; }
 .msg-edit.reverted { opacity: .6; }
 .edit-head { display: flex; justify-content: space-between; color: var(--muted); margin-bottom: 4px; }
-.diff { font-family: Georgia, serif; font-size: 13px; }
+.diff { font-family: var(--preview-font); font-size: 13px; }
 .diff del { background: #fee2e2; color: #991b1b; }
 .diff ins { background: #dcfce7; color: #166534; text-decoration: none; }
 
@@ -110,3 +118,18 @@ button.link { border: none; background: none; color: var(--muted); cursor: point
 .popover button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; }
 .popover button.primary { background: var(--accent); border-color: var(--accent); color: white; }
 .popover button:disabled { opacity: .5; cursor: default; }
+
+/* Einstellungen */
+.modal-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(31, 29, 26, .25); display: flex; align-items: flex-start; justify-content: center; padding-top: 10vh; }
+.modal { width: 480px; max-width: calc(100vw - 32px); background: var(--paper); border-radius: 10px; box-shadow: 0 16px 48px rgba(0, 0, 0, .2); padding: 14px 18px 18px; font-size: 13px; }
+.modal-head { display: flex; justify-content: space-between; align-items: center; }
+.modal-head h3 { margin: 0; font-size: 15px; }
+.modal section { margin-top: 14px; }
+.modal h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.modal label { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; margin: 6px 0; }
+.modal input, .modal select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); min-width: 0; }
+.modal .font-row { display: flex; gap: 6px; align-items: center; }
+.modal .font-row input[type="text"] { flex: 1; }
+.modal .font-row input[type="number"] { width: 60px; }
+.modal .unit { color: var(--muted); }
+.modal .hint { margin: 4px 0 0 120px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

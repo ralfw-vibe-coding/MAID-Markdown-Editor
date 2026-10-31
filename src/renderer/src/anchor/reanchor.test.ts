@@ -75,3 +75,22 @@ describe('Anker beim Öffnen wiederfinden', () => {
     expect(slice(changed, reanchor(changed, a, false))).toBe('Jörg 😀👍🏽')
   })
 })
+
+describe('Einfügemarken wiederfinden', () => {
+  const doc = 'Erster Absatz mit Text.\n\nZweiter Absatz endet hier.'
+  const point = (pos: number): StoredAnchor => ({
+    from: pos, to: pos, point: true, quote: '', text: '', status: 'ok',
+    prefix: doc.slice(Math.max(0, pos - 32), pos), suffix: doc.slice(pos, pos + 32),
+  })
+
+  it('am Textende nach externer Änderung davor', () => {
+    const changed = '# Titel\n\n' + doc
+    expect(reanchor(changed, point(doc.length), false)).toEqual({ from: changed.length, to: changed.length, status: 'ok' })
+  })
+
+  it('zwischen Absätzen', () => {
+    const at = doc.indexOf('\n\n') + 1
+    const changed = 'Vorweg.\n' + doc
+    expect(reanchor(changed, point(at), false).from).toBe(at + 'Vorweg.\n'.length)
+  })
+})

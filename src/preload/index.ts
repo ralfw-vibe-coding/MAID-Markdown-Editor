@@ -9,6 +9,9 @@ function subscribe<T>(channel: string, handler: (value: T) => void): () => void 
 
 const host: MaidHost = {
   askAi: (request) => ipcRenderer.invoke(channels.askAi, request),
+  getSettings: () => ipcRenderer.invoke(channels.getSettings),
+  setSettings: (changes) => ipcRenderer.invoke(channels.setSettings, changes),
+  claudeInfo: () => ipcRenderer.invoke(channels.claudeInfo),
   openDialog: () => ipcRenderer.invoke(channels.openDialog),
   saveDialog: (suggestedName) => ipcRenderer.invoke(channels.saveDialog, suggestedName),
   read: (path) => ipcRenderer.invoke(channels.read, path),

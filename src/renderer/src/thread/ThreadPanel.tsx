@@ -43,8 +43,16 @@ export function ThreadPanel(props: Props) {
 }
 
 function anchoredText(doc: string, a: Anchor) {
+  if (a.point) {
+    // Einfügemarke: etwas Text davor und danach zeigen, die Marke als ▍.
+    const before = doc.slice(Math.max(0, a.from - 40), a.from).replace(/\s+/g, ' ')
+    const after = doc.slice(a.from, a.from + 40).replace(/\s+/g, ' ')
+    return `${a.from > 40 ? '…' : ''}${before}▍${after}${a.from + 40 < doc.length ? '…' : ''}`
+  }
   return a.from < a.to ? doc.slice(a.from, a.to) : a.quote
 }
+
+const statusLabel = (a: Anchor) => (a.point ? 'Einfügemarke' : STATUS_LABEL[a.status])
 
 function ThreadCard({ doc, thread, anchor, busy, onOpen }: { doc: string; thread: Thread; anchor: Anchor; busy: boolean; onOpen: (id: string) => void }) {
   const last = [...thread.messages].reverse().find((m) => m.kind === 'user' || m.kind === 'ai')
@@ -59,7 +67,7 @@ function ThreadCard({ doc, thread, anchor, busy, onOpen }: { doc: string; thread
       <div className="thread-meta muted">
         {thread.messages.length} {thread.messages.length === 1 ? 'Nachricht' : 'Nachrichten'}
         {busy && ' · KI denkt …'}
-        {anchor.status !== 'ok' && ` · ${STATUS_LABEL[anchor.status]}`}
+        {(anchor.point || anchor.status !== 'ok') && ` · ${statusLabel(anchor)}`}
       </div>
     </article>
   )
@@ -96,7 +104,7 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
       }}
     >
       <div className="chat-head">
-        <span className={`status status-${anchor.status}`}>{STATUS_LABEL[anchor.status]}</span>
+        <span className={`status status-${anchor.point ? 'point' : anchor.status}`}>{statusLabel(anchor)}</span>
         <span className="chat-tools">
           <button className="icon danger" title="Thread löschen" aria-label="Thread löschen" onClick={remove}>
             <Trash2 size={15} />
@@ -112,7 +120,7 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
         {thread.messages.map((m) => {
           // Zurücknehmen geht nur, solange genau der eingesetzte Text an der Stelle steht.
           const current = m === lastEdit && m.kind === 'edit' && !m.reverted
-          const intact = current && anchor.from < anchor.to && doc.slice(anchor.from, anchor.to) === m.after
+          const intact = current && (anchor.from < anchor.to || !!anchor.point) && doc.slice(anchor.from, anchor.to) === m.after
           return (
             <MessageView
               key={m.id}

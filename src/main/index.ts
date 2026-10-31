@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions } from 'electron'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { channels, SIDECAR_SUFFIX, type AiRequest, type DiscardChoice, type MenuCommand, type OpenedFile } from '../shared/host'
-import { askClaude } from './ai'
+import { channels, SIDECAR_SUFFIX, type AiRequest, type DiscardChoice, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
+import { askClaude, claudeInfo } from './ai'
+import { getSettings, updateSettings } from './settings'
 
 let win: BrowserWindow | null = null
 let rendererReady = false
@@ -130,6 +131,9 @@ function registerIpc() {
   ipcMain.handle(channels.confirmDiscard, (_e, name: string) => askDiscard(win!, name))
 
   ipcMain.handle(channels.askAi, (_e, request: AiRequest) => askClaude(request))
+  ipcMain.handle(channels.getSettings, () => getSettings())
+  ipcMain.handle(channels.setSettings, (_e, changes: Partial<Settings>) => updateSettings(changes))
+  ipcMain.handle(channels.claudeInfo, () => claudeInfo())
 
   ipcMain.on(channels.documentState, (_e, state: { path: string | null; dirty: boolean }) => {
     dirty = state.dirty
@@ -153,7 +157,22 @@ function registerIpc() {
 
 function buildMenu() {
   const template: MenuItemConstructorOptions[] = [
-    { role: 'appMenu' },
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'Einstellungen …', accelerator: 'CmdOrCtrl+,', click: () => send('settings') },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
     {
       label: 'Ablage',
       submenu: [
@@ -168,6 +187,10 @@ function buildMenu() {
       ],
     },
     { role: 'editMenu' },
+    {
+      label: 'Kommentar',
+      submenu: [{ label: 'Mit KI besprechen', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') }],
+    },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
   ]

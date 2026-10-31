@@ -87,3 +87,30 @@ describe('Wort-Diff', () => {
     ])
   })
 })
+
+describe('Einfügemarke', () => {
+  const doc = 'Erster Satz. Letzter Satz.'
+  const end = { from: doc.length, to: doc.length, point: true }
+
+  it('Prompt zeigt die Cursorposition als ⟦⟧', () => {
+    const p = buildPrompt({ doc, ...end, messages: [], mode: 'discuss' })
+    expect(p).toContain('Letzter Satz.⟦⟧')
+    expect(p).toContain('Einfügemarke')
+  })
+
+  it('leeres oldText fügt an der Marke ein', () => {
+    expect(planEdit(doc, end, '', ' Neu.')).toEqual({ from: doc.length, to: doc.length, insert: ' Neu.' })
+  })
+
+  it('oldText muss an die Marke grenzen', () => {
+    expect(planEdit(doc, end, 'Letzter Satz.', 'Schlusssatz.')).toMatchObject({ insert: 'Schlusssatz.' })
+    expect(planEdit(doc, end, 'Erster Satz.', 'x')).toHaveProperty('error')
+  })
+
+  it('Leerraum zwischen Ausschnitt und Marke ist erlaubt (Marke hinter dem letzten Zeilenumbruch)', () => {
+    const d = 'Erster Satz.\n'
+    const p = { from: d.length, to: d.length, point: true }
+    expect(planEdit(d, p, 'Erster Satz.', 'Erster Satz. Zweiter Satz.')).toEqual({ from: 0, to: 12, insert: 'Erster Satz. Zweiter Satz.' })
+    expect(planEdit('A.\n\nB.', { from: 3, to: 3, point: true }, 'B.', 'x')).toMatchObject({ from: 4 })
+  })
+})

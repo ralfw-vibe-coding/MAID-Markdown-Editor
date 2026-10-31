@@ -1,8 +1,9 @@
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AiRequest, AiResult } from '../shared/host'
+import type { AiRequest, AiResult, ClaudeInfo } from '../shared/host'
+import { getSettings } from './settings'
 
 const TIMEOUT_MS = 180_000
 
@@ -11,6 +12,8 @@ const TIMEOUT_MS = 180_000
  * üblichen Installationsorte der Claude CLI ausdrücklich prüfen.
  */
 function claudeBinary(): string {
+  const configured = getSettings().claudePath.trim()
+  if (configured) return configured
   const candidates = [
     process.env['MAID_CLAUDE'],
     join(homedir(), '.local/bin/claude'),
@@ -38,6 +41,9 @@ export function askClaude(req: AiRequest): Promise<AiResult> {
     '--no-session-persistence',
     '--setting-sources', 'user',
   ]
+  const { model, effort } = getSettings()
+  if (model) args.push('--model', model)
+  if (effort) args.push('--effort', effort)
   return new Promise((resolve) => {
     const child = spawn(claudeBinary(), args, { cwd: tmpdir(), env: process.env })
     let stdout = ''
@@ -70,5 +76,16 @@ export function askClaude(req: AiRequest): Promise<AiResult> {
     })
 
     child.stdin.end(req.prompt)
+  })
+}
+
+/** Für die Einstellungen: welche Claude CLI wird benutzt, und läuft sie? */
+export function claudeInfo(): Promise<ClaudeInfo> {
+  const path = claudeBinary()
+  return new Promise((resolve) => {
+    execFile(path, ['--version'], { timeout: 15_000 }, (err, stdout) => {
+      if (err) resolve({ path, version: null, error: err.message })
+      else resolve({ path, version: stdout.trim() })
+    })
   })
 }

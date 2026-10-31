@@ -7,7 +7,7 @@ export type OpenedFile = {
   sidecar: string | null
 }
 
-export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose'
+export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'settings'
 
 export type DiscardChoice = 'save' | 'discard' | 'cancel'
 
@@ -17,6 +17,34 @@ export type AiRequest = {
   /** JSON-Schema der erwarteten Antwort. */
   schema: object
 }
+
+/** Einstellungen, gespeichert unter ~/Library/Application Support/MAID/settings.json. */
+export type Settings = {
+  /** Pfad zur Claude CLI; leer = automatisch suchen. */
+  claudePath: string
+  /** Modell für die KI, z. B. „opus“; leer = Standard der Claude CLI. */
+  model: string
+  /** Denkaufwand (low … max); leer = Standard. */
+  effort: string
+  /** CSS-Schriftfamilie des Manuskripts; leer = Standard. */
+  editorFont: string
+  editorFontSize: number
+  /** CSS-Schriftfamilie der Druckfahne; leer = Standard. */
+  previewFont: string
+  previewFontSize: number
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  claudePath: '',
+  model: '',
+  effort: '',
+  editorFont: '',
+  editorFontSize: 14,
+  previewFont: '',
+  previewFontSize: 17,
+}
+
+export type ClaudeInfo = { path: string; version: string | null; error?: string }
 
 export type AiResult = { ok: true; data: unknown } | { ok: false; error: string }
 
@@ -37,6 +65,11 @@ export interface MaidHost {
   onMenu(handler: (command: MenuCommand) => void): () => void
   /** Datei, die per Finder, Dock oder „Zuletzt benutzt“ geöffnet werden soll. */
   onOpenPath(handler: (path: string) => void): () => void
+  getSettings(): Promise<Settings>
+  /** Speichert geänderte Werte und liefert die vollständigen Einstellungen. */
+  setSettings(changes: Partial<Settings>): Promise<Settings>
+  /** Welche Claude CLI würde benutzt, und in welcher Version? */
+  claudeInfo(): Promise<ClaudeInfo>
   /** Meldet dem Hauptprozess, dass die Oberfläche Befehle entgegennehmen kann. */
   ready(): void
 }
@@ -55,4 +88,7 @@ export const channels = {
   openPath: 'doc:open-path',
   ready: 'renderer:ready',
   askAi: 'ai:ask',
+  getSettings: 'settings:get',
+  setSettings: 'settings:set',
+  claudeInfo: 'ai:claude-info',
 } as const

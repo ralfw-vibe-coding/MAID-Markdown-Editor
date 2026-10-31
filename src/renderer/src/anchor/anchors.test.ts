@@ -94,3 +94,43 @@ describe('Anker und Undo/Redo', () => {
     expect(anchorOf(s).status).toBe('ok')
   })
 })
+
+describe('Einfügemarken', () => {
+  function atEnd(doc: string) {
+    let state = EditorState.create({ doc, extensions: [anchorField, history(), anchorHistory] })
+    state = state.update({ effects: addAnchor.of(createAnchor(state.doc, doc.length, doc.length)) }).state
+    return state
+  }
+
+  it('Anker ohne Auswahl wird Einfügemarke und geht nicht verloren', () => {
+    let s = atEnd('Ende.')
+    expect(anchorOf(s)).toMatchObject({ point: true, from: 5, to: 5, status: 'ok' })
+    s = s.update({ changes: { from: 0, to: 5 } }).state
+    expect(anchorOf(s)).toMatchObject({ point: true, from: 0, status: 'ok' })
+  })
+
+  it('an der Marke Getipptes steht hinter der Marke', () => {
+    let s = atEnd('Ende.')
+    s = s.update({ changes: { from: 5, insert: ' Weiter.' } }).state
+    expect(anchorOf(s)).toMatchObject({ from: 5, to: 5 })
+  })
+
+  it('KI-Einfügung macht aus der Marke einen Bereich, Undo wieder eine Marke', () => {
+    let s = atEnd('Ende.')
+    const id = anchorOf(s).id
+    s = s.update({
+      changes: { from: 5, insert: ' Neuer Satz.' },
+      effects: placeAnchor.of({ id, from: 5, to: 17, quote: ' Neuer Satz.', status: 'ok' }),
+    }).state
+    expect(anchorOf(s).point).toBeUndefined()
+    expect(textOf(s)).toBe(' Neuer Satz.')
+    s = run(s, undo)
+    expect(anchorOf(s)).toMatchObject({ point: true, from: 5, to: 5 })
+  })
+
+  const run = (state: EditorState, cmd: typeof undo) => {
+    let next = state
+    cmd({ state, dispatch: (tr) => (next = tr.state) })
+    return next
+  }
+})

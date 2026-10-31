@@ -9,16 +9,31 @@ export type EditPlan = {
  * Plant eine Ersetzung von `oldText` durch `newText` an der Stelle eines Ankers.
  * `oldText` muss im aktuellen Dokument genau einmal so vorkommen, dass es den
  * Anker überlappt – sonst wird nicht blind ersetzt (z. B. weil der Autor die
- * Stelle inzwischen geändert hat). Leeres `oldText` meint genau den Anker.
+ * Stelle inzwischen geändert hat). Leeres `oldText` meint genau den Anker –
+ * an einer Einfügemarke also: `newText` dort einfügen.
  */
-export function planEdit(doc: string, anchor: { from: number; to: number }, oldText: string, newText: string): EditPlan | { error: string } {
-  if (anchor.from >= anchor.to) return { error: 'Die kommentierte Stelle ist nicht mehr im Dokument.' }
+export function planEdit(
+  doc: string,
+  anchor: { from: number; to: number; point?: boolean },
+  oldText: string,
+  newText: string,
+): EditPlan | { error: string } {
+  if (anchor.from >= anchor.to && !anchor.point) return { error: 'Die kommentierte Stelle ist nicht mehr im Dokument.' }
   if (oldText === '') oldText = doc.slice(anchor.from, anchor.to)
   if (oldText === newText) return { error: 'Die Änderung würde nichts verändern.' }
+  if (oldText === '') return { from: anchor.from, to: anchor.from, insert: newText }
 
+  // Ein Textbereich muss überlappt, eine Einfügemarke berührt werden – zwischen
+  // Ausschnitt und Marke darf höchstens Leerraum liegen (z. B. der Zeilenumbruch am Textende).
+  const onlySpace = (a: number, b: number) => /^\s*$/.test(doc.slice(a, b))
+  const touches = (i: number) => {
+    const end = i + oldText.length
+    if (!anchor.point) return i < anchor.to && end > anchor.from
+    return (i <= anchor.from || onlySpace(anchor.from, i)) && (end >= anchor.from || onlySpace(end, anchor.from))
+  }
   const hits: number[] = []
   for (let i = doc.indexOf(oldText); i >= 0; i = doc.indexOf(oldText, i + 1)) {
-    if (i < anchor.to && i + oldText.length > anchor.from) hits.push(i)
+    if (touches(i)) hits.push(i)
   }
   if (hits.length === 0) {
     return { error: 'Der zu ersetzende Text steht so nicht (mehr) an der kommentierten Stelle. Nichts geändert.' }
