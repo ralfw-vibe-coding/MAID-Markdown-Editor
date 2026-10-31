@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { ConfirmDeleteButton } from '../layout/ConfirmDeleteButton'
 import { DiffView } from './DiffView'
-import { formatWhen, timelinePositions } from './timeline'
-import type { Version } from './versions'
+import { Timeline } from './Timeline'
+import { formatWhen } from './timeWindow'
+import { wordStats, type Version } from './versions'
 
 type Props = {
   versions: Version[]
-  /** Gewählte Version (Vergleich darunter); null = aktueller Stand. */
+  /** Gewählte Version (zeigt, was sie geändert hat); null = „Aktueller Stand“ (zeigt Ungesichertes). */
   selectedId: string | null
   current: string
   available: boolean
@@ -20,11 +21,18 @@ type Props = {
   onRemove: (id: string) => void
 }
 
-/** Versionsspalte: oben sichern, dann Zeitstrahl und Liste zum Wählen, darunter der Vergleich. */
+/**
+ * Versionsspalte: oben sichern, dann Zeitstrahl und Liste zum Wählen, darunter
+ * der Vergleich – für eine gewählte Version ihre Änderungen gegenüber der
+ * vorherigen, für den „Aktuellen Stand“ das noch nicht Gesicherte seit der
+ * neuesten Version. Der Aktuelle Stand steht wie eine Version oben in der
+ * Liste, ist aber als ungesichert gekennzeichnet.
+ */
 export function VersionsPane(props: Props) {
   const { versions, selectedId, current, available } = props
   const selected = versions.find((v) => v.id === selectedId)
   const previous = selected ? versions[versions.indexOf(selected) - 1] : undefined
+  const latest = versions.at(-1)
 
   if (!available) return <p className="threads-empty muted">Versionen gibt es nur in der App.</p>
   return (
@@ -37,11 +45,34 @@ export function VersionsPane(props: Props) {
       ) : (
         <>
           <Timeline versions={versions} selectedId={selectedId} onSelect={props.onSelect} />
-          <VersionList {...props} />
+          <VersionList {...props} unsaved={latest ? latest.text !== current : false} latestText={latest?.text ?? ''} />
           {selected ? (
-            <DiffView version={selected} previous={previous} current={current} onRestore={() => props.onRestore(selected.id)} onClose={() => props.onSelect(null)} />
+            <DiffView
+              title={selected.message || '(ohne Nachricht)'}
+              meta={formatWhen(selected.createdAt)}
+              legend={previous ? 'Was diese Version gegenüber der vorherigen geändert hat' : 'Erste Version'}
+              before={previous?.text ?? ''}
+              after={selected.text}
+              emptyText="Diese Version hat nichts geändert."
+              restoreLabel="Zurück zu dieser Version"
+              restoreTitle="Manuskript auf diese Version zurücksetzen (vorher wird der jetzige Stand gesichert)"
+              onRestore={selected.text === current ? undefined : () => props.onRestore(selected.id)}
+              onClose={() => props.onSelect(null)}
+            />
           ) : (
-            <p className="threads-empty muted">Eine Version im Zeitstrahl oder in der Liste wählen, um zu sehen, was sich geändert hat.</p>
+            latest && (
+              <DiffView
+                title="Aktueller Stand"
+                meta="nicht gesichert"
+                legend={`Änderungen seit „${latest.message || 'letzte Version'}“`}
+                before={latest.text}
+                after={current}
+                emptyText="Alles ist als Version gesichert."
+                restoreLabel="Änderungen verwerfen"
+                restoreTitle={`Zurück zu „${latest.message}“ – der jetzige Stand wird vorher als Version gesichert`}
+                onRestore={latest.text === current ? undefined : () => props.onRestore(latest.id)}
+              />
+            )
           )}
         </>
       )}
@@ -108,52 +139,30 @@ function SaveForm({ focusToken, onSave, onSuggest }: Props) {
   )
 }
 
-/** Zeitstrahl: ein Punkt je Version, maßstäblich bis „jetzt“; Klick wählt. */
-function Timeline({ versions, selectedId, onSelect }: { versions: Version[]; selectedId: string | null; onSelect: (id: string | null) => void }) {
-  const [now] = useState(() => Date.now())
-  const positions = useMemo(() => timelinePositions(versions.map((v) => Date.parse(v.createdAt)), Math.max(now, Date.now())), [versions, now])
-  const selectedIndex = versions.findIndex((v) => v.id === selectedId)
-  return (
-    <div className="timeline" aria-label="Zeitstrahl der Versionen">
-      <div className="timeline-track">
-        <div className="timeline-axis" />
-        {selectedIndex >= 0 && (
-          <div className="timeline-span" style={{ left: `${positions[selectedIndex] * 100}%`, right: 0 }} title="Zeitraum zwischen gewählter Version und jetzt" />
-        )}
-        {versions.map((v, i) => (
-          <button
-            key={v.id}
-            className={`timeline-dot ${v.id === selectedId ? 'selected' : ''} ${v.auto ? 'auto' : ''}`}
-            style={{ left: `${positions[i] * 100}%` }}
-            title={`${v.message || '(ohne Nachricht)'} – ${formatWhen(v.createdAt)}`}
-            aria-label={v.message}
-            onClick={() => onSelect(v.id === selectedId ? null : v.id)}
-          />
-        ))}
-        <button
-          className={`timeline-now ${selectedId === null ? 'selected' : ''}`}
-          style={{ left: '100%' }}
-          title="Jetzt – aktueller Stand"
-          aria-label="Jetzt"
-          onClick={() => onSelect(null)}
-        />
-      </div>
-      <div className="timeline-labels muted">
-        <span>{formatWhen(versions[0].createdAt)}</span>
-        <span>jetzt</span>
-      </div>
-    </div>
-  )
-}
-
-function VersionList({ versions, selectedId, onSelect, onRemove }: Props) {
+function VersionList({ versions, selectedId, current, unsaved, latestText, onSelect, onRemove }: Props & { unsaved: boolean; latestText: string }) {
   const list = useRef<HTMLDivElement>(null)
+  // Statistik des Aktuellen Stands gegenüber der neuesten Version (absatzweise, also auch bei langen Texten schnell).
+  const stats = useMemo(() => (unsaved ? wordStats(latestText, current) : null), [unsaved, latestText, current])
   // Die gewählte Version in der Liste sichtbar halten (z. B. nach Klick im Zeitstrahl).
   useEffect(() => {
     list.current?.querySelector('.selected')?.scrollIntoView({ block: 'nearest' })
   }, [selectedId])
   return (
     <div className="version-list" ref={list}>
+      <div className={`version-row current ${selectedId === null ? 'selected' : ''}`} onClick={() => onSelect(null)} title="Der Stand im Manuskript – noch keine Version">
+        <span className="version-dot" />
+        <span className="version-message">Aktueller Stand</span>
+        <span className="version-meta">
+          {stats ? (
+            <>
+              nicht gesichert · <span className="plus">+{stats.added}</span> <span className="minus">−{stats.removed}</span>
+            </>
+          ) : (
+            'alles gesichert'
+          )}
+        </span>
+        <span />
+      </div>
       {[...versions].reverse().map((v) => (
         <div key={v.id} className={`version-row ${v.id === selectedId ? 'selected' : ''} ${v.auto ? 'auto' : ''}`} onClick={() => onSelect(v.id === selectedId ? null : v.id)}>
           <span className="version-dot" />
