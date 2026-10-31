@@ -28,6 +28,32 @@ export function saveCollapsed(c: Collapsed) {
   }
 }
 
+/** Breite des Seitenpanels (KI): Vorgabe, Grenzen, gemerkter Wert. */
+export const SIDE_DEFAULT = 360
+const SIDE_MIN = 260
+/** So viel Platz bleibt für Manuskript und Druckfahne mindestens. */
+const MAIN_MIN = 320
+const SIDE_KEY = 'maid.sideWidth'
+
+export const clampSide = (w: number, total: number) => Math.round(Math.max(SIDE_MIN, Math.min(w, total - MAIN_MIN)))
+
+export function loadSideWidth(): number {
+  try {
+    const v = Number(localStorage.getItem(SIDE_KEY))
+    return v >= SIDE_MIN ? v : SIDE_DEFAULT
+  } catch {
+    return SIDE_DEFAULT
+  }
+}
+
+export function saveSideWidth(w: number) {
+  try {
+    localStorage.setItem(SIDE_KEY, String(w))
+  } catch {
+    // ohne Speicher bleibt die Breite nur bis zum Neuladen
+  }
+}
+
 /** Klappt eine Spalte um. Wäre danach keine mehr offen, geht das Manuskript auf. */
 export function toggleCollapsed(c: Collapsed, id: PaneId): Collapsed {
   const next = { ...c, [id]: !c[id] }
@@ -41,18 +67,28 @@ export function toggleCollapsed(c: Collapsed, id: PaneId): Collapsed {
  */
 export const cannotCollapse = (c: Collapsed, id: PaneId) => id === 'editor' && !c.editor && c.preview && c.side
 
+/** Welche Trenner sind ziehbar? Nur zwischen zwei offenen Bereichen mit fester Aufteilung. */
+export function visibleSplitters(c: Collapsed) {
+  return {
+    /** Manuskript | Druckfahne */
+    split: !c.editor && !c.preview,
+    /** (Manuskript/Druckfahne) | Seitenpanel – fehlt, wenn das Seitenpanel den ganzen Platz hat. */
+    side: !c.side && !(c.editor && c.preview),
+  }
+}
+
 /**
- * Spaltenraster für Manuskript | Trenner | Druckfahne | Seitenpanel.
- * Offene Spalten teilen sich den Platz; der Trenner gibt es nur, wenn
- * Manuskript und Druckfahne beide offen sind.
+ * Spaltenraster für Manuskript | Trenner | Druckfahne | Trenner | Seitenpanel.
+ * Offene Spalten teilen sich den Platz; das Seitenpanel hat eine feste,
+ * ziehbare Breite – außer es ist als einzige Spalte offen.
  */
 export function gridColumns(c: Collapsed, split: number, splitterWidth: number, sideWidth: number): string {
   const strip = `${COLLAPSED_WIDTH}px`
-  const both = !c.editor && !c.preview
-  const editor = c.editor ? strip : both ? `minmax(0, ${split}fr)` : 'minmax(0, 1fr)'
-  const preview = c.preview ? strip : both ? `minmax(0, ${1 - split}fr)` : 'minmax(0, 1fr)'
+  const show = visibleSplitters(c)
+  const editor = c.editor ? strip : show.split ? `minmax(0, ${split}fr)` : 'minmax(0, 1fr)'
+  const preview = c.preview ? strip : show.split ? `minmax(0, ${1 - split}fr)` : 'minmax(0, 1fr)'
   const side = c.side ? strip : c.editor && c.preview ? 'minmax(0, 1fr)' : `${sideWidth}px`
-  return `${editor} ${both ? splitterWidth : 0}px ${preview} ${side}`
+  return `${editor} ${show.split ? splitterWidth : 0}px ${preview} ${show.side ? splitterWidth : 0}px ${side}`
 }
 
 /** Chevron im Kopf einer offenen Spalte – überall „>“, damit alle Spalten gleich aussehen. */

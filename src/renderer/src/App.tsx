@@ -32,6 +32,11 @@ import {
   CollapsedStrip,
   gridColumns,
   cannotCollapse,
+  clampSide,
+  loadSideWidth,
+  saveSideWidth,
+  SIDE_DEFAULT,
+  visibleSplitters,
   loadCollapsed,
   saveCollapsed,
   toggleCollapsed,
@@ -55,7 +60,6 @@ const initialDoc = host ? '' : sampleDoc
 
 type Pending = SourceRange & { x: number; y: number }
 
-const THREADS_WIDTH = 360
 const SPLITTER_WIDTH = 5
 const SPLIT_KEY = 'maid.split'
 
@@ -100,7 +104,9 @@ export function App() {
   const [draft, setDraft] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [split, setSplit] = useState(loadSplit)
-  const [dragging, setDragging] = useState(false)
+  /** Welcher Trenner gerade gezogen wird. */
+  const [dragging, setDragging] = useState<'split' | 'side' | null>(null)
+  const [sideW, setSideW] = useState(loadSideWidth)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
   const togglePane = (id: PaneId) =>
     setCollapsed((c) => {
@@ -108,7 +114,7 @@ export function App() {
       saveCollapsed(next)
       return next
     })
-  const sideWidth = collapsed.side ? COLLAPSED_WIDTH : THREADS_WIDTH
+  const splitters = visibleSplitters(collapsed)
   /** Zeigt Kommentare oder Chat und klappt das Seitenpanel dafür bei Bedarf auf. */
   const showSide = (p: 'comments' | 'chat') => {
     setPanel(p)
@@ -390,9 +396,39 @@ export function App() {
     const main = mainRef.current
     if (!dragging || !main) return
     const rect = main.getBoundingClientRect()
-    const width = rect.width - sideWidth - SPLITTER_WIDTH
+    if (dragging === 'side') return setSideW(clampSide(rect.right - e.clientX - SPLITTER_WIDTH / 2, rect.width))
+    const side = collapsed.side ? COLLAPSED_WIDTH : sideW + SPLITTER_WIDTH
+    const width = rect.width - side - SPLITTER_WIDTH
     setSplit(clampSplit((e.clientX - rect.left) / width))
   }
+
+  /** Gemeinsames Verhalten beider Trenner: ziehen, loslassen merkt die Breite, Doppelklick setzt zurück. */
+  const splitterProps = (kind: 'split' | 'side') => ({
+    role: 'separator',
+    'aria-orientation': 'vertical' as const,
+    title: 'Ziehen zum Ändern der Breite, Doppelklick setzt zurück',
+    className: `splitter ${(kind === 'split' ? splitters.split : splitters.side) ? '' : 'hidden'}`,
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      setDragging(kind)
+    },
+    onPointerMove: onSplitterMove,
+    onPointerUp: () => {
+      setDragging(null)
+      if (kind === 'split') saveSplit(split)
+      else saveSideWidth(sideW)
+    },
+    onDoubleClick: () => {
+      if (kind === 'split') {
+        setSplit(0.5)
+        saveSplit(0.5)
+      } else {
+        setSideW(SIDE_DEFAULT)
+        saveSideWidth(SIDE_DEFAULT)
+      }
+    },
+  })
 
   async function askChat(text: string) {
     const view = viewRef.current
@@ -494,7 +530,7 @@ export function App() {
       <main
         ref={mainRef}
         className={dragging ? 'dragging' : undefined}
-        style={{ gridTemplateColumns: gridColumns(collapsed, split, SPLITTER_WIDTH, THREADS_WIDTH) }}
+        style={{ gridTemplateColumns: gridColumns(collapsed, split, SPLITTER_WIDTH, sideW) }}
       >
         {/* Weggeklappte Spalten bleiben im DOM, damit Editor, Entwürfe und Verlauf erhalten bleiben. */}
         <section className={`pane manuscript ${collapsed.editor ? 'collapsed' : ''}`}>
@@ -505,26 +541,7 @@ export function App() {
           </h2>
           <div className="editor" ref={editorHost} />
         </section>
-        <div
-          className={`splitter ${collapsed.editor || collapsed.preview ? 'hidden' : ''}`}
-          role="separator"
-          aria-orientation="vertical"
-          title="Ziehen zum Ändern der Breite, Doppelklick setzt zurück"
-          onPointerDown={(e) => {
-            e.preventDefault()
-            e.currentTarget.setPointerCapture(e.pointerId)
-            setDragging(true)
-          }}
-          onPointerMove={onSplitterMove}
-          onPointerUp={() => {
-            setDragging(false)
-            saveSplit(split)
-          }}
-          onDoubleClick={() => {
-            setSplit(0.5)
-            saveSplit(0.5)
-          }}
-        />
+        <div {...splitterProps('split')} />
         <section className={`pane ${collapsed.preview ? 'collapsed' : ''}`}>
           {collapsed.preview && <CollapsedStrip title="Druckfahne" onExpand={() => togglePane('preview')} />}
           <h2>
@@ -533,6 +550,7 @@ export function App() {
           </h2>
           <Preview ref={previewRef} model={model} onMouseUp={onPreviewMouseUp} />
         </section>
+        <div {...splitterProps('side')} />
         <aside className={`pane threads ${activeId || panel === 'chat' ? 'chat-open' : ''} ${collapsed.side ? 'collapsed' : ''}`}>
           {collapsed.side && (
             <CollapsedStrip title={panel === 'chat' ? 'Chat' : 'Kommentare'} onExpand={() => togglePane('side')} />

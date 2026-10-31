@@ -172,3 +172,7 @@ button.icon svg { flex-shrink: 0; }
 .pane-strip:hover { background: #f1efe9; color: var(--ink); }
 .pane-strip-title { writing-mode: vertical-rl; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
 .splitter.hidden { visibility: hidden; pointer-events: none; border: none; }
+
+/* Offener Thread bzw. Chat reicht bis an den unteren Fensterrand. */
+.threads.chat-open { padding-bottom: 0; }
+.chat { margin-bottom: 0; border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
