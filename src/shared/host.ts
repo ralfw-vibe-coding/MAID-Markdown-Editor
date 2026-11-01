@@ -90,6 +90,8 @@ export interface MaidHost {
   /** Inhalt der Versionsdatei des Dokuments oder null, wenn es noch keine gibt. */
   readVersions(documentPath: string): Promise<string | null>
   writeVersions(documentPath: string, content: string): Promise<void>
+  /** Öffnet einen Link (http, https, mailto) im Standardprogramm, z. B. dem Browser. */
+  openExternal(url: string): void
   /** Meldet dem Hauptprozess, dass die Oberfläche Befehle entgegennehmen kann. */
   ready(): void
 }
@@ -128,4 +130,5 @@ export const channels = {
   saveImage: 'file:save-image',
   readVersions: 'file:read-versions',
   writeVersions: 'file:write-versions',
+  openExternal: 'shell:open-external',
 } as const

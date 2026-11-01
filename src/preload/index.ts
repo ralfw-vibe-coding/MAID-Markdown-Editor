@@ -15,6 +15,7 @@ const host: MaidHost = {
   saveImage: (documentPath, data, extension) => ipcRenderer.invoke(channels.saveImage, documentPath, data, extension),
   readVersions: (documentPath) => ipcRenderer.invoke(channels.readVersions, documentPath),
   writeVersions: (documentPath, content) => ipcRenderer.invoke(channels.writeVersions, documentPath, content),
+  openExternal: (url) => ipcRenderer.send(channels.openExternal, url),
   openDialog: () => ipcRenderer.invoke(channels.openDialog),
   saveDialog: (suggestedName) => ipcRenderer.invoke(channels.saveDialog, suggestedName),
   read: (path) => ipcRenderer.invoke(channels.read, path),

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { channels, LEGACY_VERSIONS_SUFFIX, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
@@ -64,6 +64,15 @@ function openPath(path: string) {
   else createWindow(path)
 }
 
+/** Links, die MAID an das Standardprogramm (Browser, Mail) weitergibt – nie Dateien oder Skripte. */
+function openExternalLink(url: string): void {
+  try {
+    if (['http:', 'https:', 'mailto:'].includes(new URL(url).protocol)) void shell.openExternal(url)
+  } catch {
+    // Kein gültiger Link – nichts zu öffnen.
+  }
+}
+
 function createWindow(path?: string): DocWindow {
   // Neue Fenster leicht versetzt zum aktiven, damit sie nicht genau übereinander liegen.
   const offset = BrowserWindow.getFocusedWindow()?.getPosition()
@@ -81,6 +90,16 @@ function createWindow(path?: string): DocWindow {
       nodeIntegration: false,
       sandbox: false,
     },
+  })
+  // Das Fenster zeigt immer MAID: Links gehen in den Browser, statt die Oberfläche zu ersetzen.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalLink(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url.split('#')[0] === win.webContents.getURL().split('#')[0]) return
+    e.preventDefault()
+    openExternalLink(url)
   })
   const id = win.webContents.id
   const dw: DocWindow = { win, ready: false, pending: path ? [path] : [], path: null, dirty: false, pristine: !path, closeConfirmed: false }
@@ -234,6 +253,8 @@ function registerIpc() {
     await unlink(documentPath + LEGACY_VERSIONS_SUFFIX).catch(() => {})
   })
   ipcMain.handle(channels.saveImage, (_e, documentPath: string, data: Uint8Array, extension: string) => saveImage(documentPath, data, extension))
+
+  ipcMain.on(channels.openExternal, (_e, url: string) => openExternalLink(url))
 
   ipcMain.on(channels.documentState, (e, state: DocumentState) => {
     const dw = senderWindow(e)

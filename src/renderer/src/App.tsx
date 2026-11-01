@@ -326,11 +326,19 @@ export function App() {
     enabled: syncScroll && !collapsed.editor && !collapsed.preview,
   })
 
-  /** Einfacher Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript. */
+  /**
+   * Einfacher Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript;
+   * ein Klick auf einen Link öffnet ihn im Browser (Markieren über den Link bleibt möglich).
+   */
   function onPreviewClick(e: MouseEvent<HTMLDivElement>) {
-    if (e.detail !== 1 || collapsed.editor) return
-    if ((e.target as HTMLElement).closest('a, .img-handle')) return
-    if (!window.getSelection()?.isCollapsed) return
+    if (e.detail !== 1 || !window.getSelection()?.isCollapsed) return
+    const link = (e.target as HTMLElement).closest('a')
+    if (link) {
+      if (host) host.openExternal(link.href)
+      else window.open(link.href, '_blank', 'noopener')
+      return
+    }
+    if (collapsed.editor || (e.target as HTMLElement).closest('.img-handle')) return
     const caret = document.caretPositionFromPoint?.(e.clientX, e.clientY)
     const node = caret?.offsetNode
     const span = node instanceof Text ? node.parentElement?.closest<HTMLElement>('[data-seg]') : null
