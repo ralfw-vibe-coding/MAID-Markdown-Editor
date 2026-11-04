@@ -170,6 +170,8 @@ button.pane-toggle:disabled { opacity: .3; cursor: default; background: none; }
 .panel-tabs button.pane-toggle { margin: 0 0 0 auto; padding: 0; align-self: center; }
 button.icon svg { flex-shrink: 0; }
 .pane.collapsed { overflow: hidden; }
+/* Textmodus: die Druckfahne bleibt im DOM (Rasterplatz), ist aber nicht zu sehen. */
+.pane.gone { visibility: hidden; overflow: hidden; border: none; }
 .pane.collapsed > :not(.pane-strip) { display: none !important; }
 .pane-strip { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 9px 0; border: none; background: var(--bg); color: var(--muted); cursor: pointer; font: inherit; }
 .pane-strip:hover { background: #f1efe9; color: var(--ink); }

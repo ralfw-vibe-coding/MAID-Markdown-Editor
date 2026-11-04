@@ -87,6 +87,8 @@ Bewusst festgehaltene Fassungen markieren, was dir etwas bedeutet; die automatis
 - **Formatieren** mit Menü „Format“, Symbolleiste und Kürzeln: Fett ⌘B, Kursiv ⌘I, Unterstrichen ⌘U, Durchgestrichen ⇧⌘X, Hervorgehoben ⇧⌘H (`==…==`), Link ⌘K.
 - **Bilder** per ⌘V oder Ziehen ins Manuskript; sie landen im Ordner `<Datei>.md - Images` neben dem Dokument (im Finder direkt darunter). In der Druckfahne lässt sich die Anzeigegröße mit einem Griff ziehen (gespeichert als `![Alt|300](…)` wie in Obsidian). Bilder werden nie aufgeräumt – jede alte Fassung findet ihre Bilder wieder.
 - **Mitlaufendes Scrollen** zwischen Manuskript und Druckfahne (Kette im Titel der Druckfahne); ein Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript.
+- **Links** in der Druckfahne öffnen mit einem Klick im Browser.
+- **Textdateien** (`.txt`): MAID zeigt dann nur das Manuskript, ohne Druckfahne, Markdown-Hervorhebung und Formatierung. Chat, Kommentare per ⇧⌘K und Fassungen funktionieren wie gewohnt; Claude weiß, dass es um reinen Text geht. Über „Sichern unter …“ lässt sich jedes Dokument als Markdown oder Text speichern. Im Finder steht MAID für `.txt` unter „Öffnen mit“, ist dafür aber nicht Standardprogramm.
 - **Mehrere Fenster**, eine Datei je Fenster.
 - **Spalten** lassen sich wegklappen und in der Breite ziehen.
 - **Einstellungen** (⌘,): Modell, Denkaufwand und Pfad der Claude CLI, Auto-Speichern, automatische Fassungen, Schriften für Manuskript und Druckfahne (mit Vorschau).

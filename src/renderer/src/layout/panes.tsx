@@ -70,6 +70,12 @@ export function toggleCollapsed(c: Collapsed, id: PaneId): Collapsed {
   return Object.values(next).every(Boolean) ? { ...next, editor: false } : next
 }
 
+/** Textmodus ohne Druckfahne: sie gilt als weggeklappt, und mindestens das Manuskript bleibt offen. */
+export function withoutPreview(c: Collapsed): Collapsed {
+  const next = { ...c, preview: true }
+  return Object.values(next).every(Boolean) ? { ...next, editor: false } : next
+}
+
 /**
  * Lässt sich die Spalte nicht wegklappen? Nur das Manuskript, wenn es als
  * einzige offen ist – jede andere letzte Spalte macht beim Wegklappen dem
@@ -104,15 +110,16 @@ export function visibleSplitters(c: Collapsed) {
  * Spaltenraster: Versionen | Trenner | Manuskript | Trenner | Druckfahne | Trenner | Seitenpanel.
  * Manuskript und Druckfahne teilen sich den Platz; Versionen und Seitenpanel
  * haben eine feste, ziehbare Breite – außer eine von ihnen muss den Platz füllen.
+ * `previewHidden` (Textmodus) nimmt der Druckfahne auch den weggeklappten Streifen.
  */
-export function gridColumns(c: Collapsed, split: number, splitterWidth: number, sideWidth: number, versionsWidth: number): string {
+export function gridColumns(c: Collapsed, split: number, splitterWidth: number, sideWidth: number, versionsWidth: number, previewHidden = false): string {
   const strip = `${COLLAPSED_WIDTH}px`
   const show = visibleSplitters(c)
   const flex = flexPane(c)
   const fill = 'minmax(0, 1fr)'
   const versions = c.versions ? strip : flex === 'versions' ? fill : `${versionsWidth}px`
   const editor = c.editor ? strip : show.split ? `minmax(0, ${split}fr)` : fill
-  const preview = c.preview ? strip : show.split ? `minmax(0, ${1 - split}fr)` : fill
+  const preview = previewHidden ? '0px' : c.preview ? strip : show.split ? `minmax(0, ${1 - split}fr)` : fill
   const side = c.side ? strip : flex === 'side' ? fill : `${sideWidth}px`
   const gap = (on: boolean) => `${on ? splitterWidth : 0}px`
   return [versions, gap(show.versions), editor, gap(show.split), preview, gap(show.side), side].join(' ')

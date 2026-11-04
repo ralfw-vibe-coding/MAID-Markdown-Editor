@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildPrompt, parseAnswer } from './lektor'
+import { buildPrompt, parseAnswer, SYSTEM_PROMPT } from './lektor'
+import { forDocument, isPlainTextPath } from './plainText'
 import { minimalChange, planEdit } from './planEdit'
 import { diffWords } from '../thread/diffWords'
 import { message } from '../thread/thread'
@@ -144,5 +145,19 @@ describe('Änderung an anderer Stelle', () => {
 
   it('Text gar nicht vorhanden: eigene Meldung', () => {
     expect((planEdit(doc, anchor, 'gibt es nicht', 'x') as { error: string }).error).toContain('kommt im Dokument nicht vor')
+  })
+})
+
+describe('Textmodus (.txt)', () => {
+  it('erkennt Textdateien an der Endung', () => {
+    expect(isPlainTextPath('/a/Notizen.txt')).toBe(true)
+    expect(isPlainTextPath('/a/NOTIZEN.TXT')).toBe(true)
+    expect(isPlainTextPath('/a/text.md')).toBe(false)
+    expect(isPlainTextPath(null)).toBe(false)
+  })
+
+  it('sagt Claude nur bei reinem Text, dass es kein Markdown ist', () => {
+    expect(forDocument(SYSTEM_PROMPT, false)).toBe(SYSTEM_PROMPT)
+    expect(forDocument(SYSTEM_PROMPT, true)).toContain('reiner Text')
   })
 })

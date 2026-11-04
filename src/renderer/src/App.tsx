@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { basicSetup } from 'codemirror'
-import { EditorState, Prec, type Extension } from '@codemirror/state'
-import { EditorView, keymap } from '@codemirror/view'
+import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state'
+import { EditorView, keymap, type Command } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
 import { IMAGE_EXTENSIONS, LOCAL_FILE_SCHEME, type MaidHost } from '../../shared/host'
 import { imageExtension, imageMarkdown, setImageWidth } from './render/imageSize'
@@ -54,11 +54,13 @@ import {
   loadCollapsed,
   saveCollapsed,
   toggleCollapsed,
+  withoutPreview,
   type PaneId,
 } from './layout/panes'
 import { appendMessage, createThread, message, syncEditStates, syncLastEdit, updateThread, type Message, type NewMessage, type Thread } from './thread/thread'
 import { ThreadPanel } from './thread/ThreadPanel'
 import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
+import { forDocument, isPlainTextPath } from './ai/plainText'
 import { minimalChange, planEdit } from './ai/planEdit'
 
 declare global {
@@ -102,6 +104,10 @@ const PANEL_TITLE: Record<SidePanel, string> = { comments: 'Kommentare', chat: '
 function imageFiles(list: FileList | undefined | null): File[] {
   return [...(list ?? [])].filter((f) => IMAGE_EXTENSIONS.includes(imageExtension(f) ?? ''))
 }
+
+/** Markdown-Hervorhebung und -Tasten (Listen fortsetzen); im Textmodus leer. */
+const markdownMode = new Compartment()
+const MARKDOWN_MODE: Extension = [markdown({ addKeymap: false }), markdownKeymap]
 
 const SPLITTER_WIDTH = 5
 const SPLIT_KEY = 'maid.split'
@@ -159,6 +165,8 @@ export function App() {
   const [sideW, setSideW] = useState(loadSideWidth)
   const [versionsW, setVersionsW] = useState(loadVersionsWidth)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
+  /** Zählt geladene Dokumente – jedes bringt einen frischen Editorzustand mit. */
+  const [loads, setLoads] = useState(0)
   /** Mitlaufendes Scrollen von Manuskript und Druckfahne (Kette im Titel der Druckfahne). */
   const [syncScroll, setSyncScroll] = useState(() => {
     try {
@@ -182,7 +190,6 @@ export function App() {
       saveCollapsed(next)
       return next
     })
-  const splitters = visibleSplitters(collapsed)
   /** Zeigt Kommentare oder Chat und klappt das Seitenpanel dafür bei Bedarf auf. */
   const showSide = (p: SidePanel) => {
     // Ein noch leerer Kommentar (z. B. per ⇧⌘K angelegt) wird beim Wechsel zum Chat verworfen.
@@ -220,12 +227,15 @@ export function App() {
   // Laufende KI-Anfragen brauchen den aktuellen Stand, nicht den ihres Starts.
   const threadsRef = useRef(threads)
   threadsRef.current = threads
+  /** Textmodus (.txt): keine Markdown-Formatierung, keine Bilder. Wird gesetzt, sobald der Pfad feststeht. */
+  const plainTextRef = useRef(false)
+  /** Formatierungskürzel greifen nur bei Markdown; im Textmodus gehen sie ins Leere. */
+  const unlessPlain = (cmd: Command): Command => (view) => plainTextRef.current || cmd(view)
 
   const extensions = useMemo<Extension[]>(
     () => [
       basicSetup,
-      markdown({ addKeymap: false }),
-      markdownKeymap,
+      markdownMode.of(MARKDOWN_MODE),
       EditorView.lineWrapping,
       anchorField,
       anchorHistory,
@@ -237,19 +247,19 @@ export function App() {
         keymap.of([
           { key: 'Mod-Shift-k', run: () => (threadFromEditorRef.current(), true) },
           { key: 'Mod-Shift-l', run: () => (newChatRef.current(), true) },
-          { key: 'Mod-b', run: formatCommands.bold },
-          { key: 'Mod-i', run: formatCommands.italic },
-          { key: 'Mod-u', run: formatCommands.underline },
-          { key: 'Mod-Shift-x', run: formatCommands.strike },
-          { key: 'Mod-Shift-h', run: formatCommands.highlight },
-          { key: 'Mod-k', run: formatCommands.link },
+          { key: 'Mod-b', run: unlessPlain(formatCommands.bold) },
+          { key: 'Mod-i', run: unlessPlain(formatCommands.italic) },
+          { key: 'Mod-u', run: unlessPlain(formatCommands.underline) },
+          { key: 'Mod-Shift-x', run: unlessPlain(formatCommands.strike) },
+          { key: 'Mod-Shift-h', run: unlessPlain(formatCommands.highlight) },
+          { key: 'Mod-k', run: unlessPlain(formatCommands.link) },
         ]),
       ),
       // Bilder aus der Zwischenablage oder per Ziehen landen im Bilderordner neben dem Dokument.
       EditorView.domEventHandlers({
         paste(e, view) {
           const files = imageFiles(e.clipboardData?.files)
-          if (files.length === 0) return false
+          if (files.length === 0 || plainTextRef.current) return false
           e.preventDefault()
           const { from, to } = view.state.selection.main
           void insertImagesRef.current(files, from, to)
@@ -257,7 +267,7 @@ export function App() {
         },
         drop(e, view) {
           const files = imageFiles(e.dataTransfer?.files)
-          if (files.length === 0) return false
+          if (files.length === 0 || plainTextRef.current) return false
           e.preventDefault()
           const at = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.head
           void insertImagesRef.current(files, at, at)
@@ -315,15 +325,26 @@ export function App() {
       setBusy(new Set())
       setPending(null)
       setActiveId(null)
+      setLoads((n) => n + 1)
       view.focus()
     },
   })
+
+  const plainText = isPlainTextPath(file.path)
+  plainTextRef.current = plainText
+  // Ein geladener Editorzustand beginnt mit Markdown; danach den Modus zum Pfad passend setzen.
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: markdownMode.reconfigure(plainText ? [] : MARKDOWN_MODE) })
+  }, [plainText, loads])
+  /** Im Textmodus gibt es keine Druckfahne; die übrigen Spalten bleiben, wie sie sind. */
+  const layout = plainText ? withoutPreview(collapsed) : collapsed
+  const splitters = visibleSplitters(layout)
 
   const { jumpTo } = useScrollSync({
     viewRef,
     previewRef,
     segments: model.segments,
-    enabled: syncScroll && !collapsed.editor && !collapsed.preview,
+    enabled: syncScroll && !layout.editor && !layout.preview,
   })
 
   /**
@@ -614,7 +635,7 @@ export function App() {
         messages: thread.messages,
         mode,
       })
-      const result = await host.askAi({ prompt, systemPrompt: SYSTEM_PROMPT, schema: RESPONSE_SCHEMA })
+      const result = await host.askAi({ prompt, systemPrompt: forDocument(SYSTEM_PROMPT, plainText), schema: RESPONSE_SCHEMA })
       if (!result.ok) return appendTo(id, { kind: 'error', text: result.error })
       const answer = parseAnswer(result.data)
       appendTo(id, { kind: 'ai', text: answer.reply })
@@ -699,7 +720,7 @@ export function App() {
   /** Formatierung auf die Auswahl im Manuskript anwenden. */
   function applyFormat(cmd: FormatCommand) {
     const view = viewRef.current
-    if (!view) return
+    if (!view || plainTextRef.current) return
     formatCommands[cmd](view)
     view.focus()
   }
@@ -777,7 +798,7 @@ export function App() {
       const { from, to } = view.state.selection.main
       chatFocusRef.current.set(id, { from, to })
       const prompt = buildChatPrompt({ doc: view.state.doc.toString(), focus: { from, to }, messages })
-      const result = await host.askAi({ prompt, systemPrompt: CHAT_SYSTEM_PROMPT, schema: CHAT_SCHEMA })
+      const result = await host.askAi({ prompt, systemPrompt: forDocument(CHAT_SYSTEM_PROMPT, plainText), schema: CHAT_SCHEMA })
       if (!result.ok) return appendToChat(id, message({ kind: 'error', text: result.error }))
       const answer = parseChatAnswer(result.data)
       setChats((cs) => updateChat(cs, id, (c) => suggestTitle({ ...c, messages: [...c.messages, message({ kind: 'ai', text: answer.reply })] }, answer.title)))
@@ -887,14 +908,14 @@ export function App() {
       <main
         ref={mainRef}
         className={dragging ? 'dragging' : undefined}
-        style={{ gridTemplateColumns: gridColumns(collapsed, split, SPLITTER_WIDTH, sideW, versionsW) }}
+        style={{ gridTemplateColumns: gridColumns(layout, split, SPLITTER_WIDTH, sideW, versionsW, plainText) }}
       >
         {/* Weggeklappte Spalten bleiben im DOM, damit Editor, Entwürfe und Verlauf erhalten bleiben. */}
         <section className={`pane versions-column ${collapsed.versions ? 'collapsed' : ''}`}>
           {collapsed.versions && <CollapsedStrip title="Fassungen" onExpand={() => togglePane('versions')} />}
           <h2>
             <span className="pane-title">Fassungen</span>
-            <CollapseButton disabled={cannotCollapse(collapsed, 'versions')} onClick={() => togglePane('versions')} />
+            <CollapseButton disabled={cannotCollapse(layout, 'versions')} onClick={() => togglePane('versions')} />
           </h2>
           <VersionsPane
             versions={versions.versions}
@@ -933,13 +954,13 @@ export function App() {
                 onToggleCommit={() => void updateSettings({ autoCommitMinutes: settings.autoCommitMinutes > 0 ? 0 : AUTO_COMMIT_DEFAULT })}
               />
             )}
-            <FormatToolbar onFormat={applyFormat} />
-            <CollapseButton disabled={cannotCollapse(collapsed, 'editor')} onClick={() => togglePane('editor')} />
+            {!plainText && <FormatToolbar onFormat={applyFormat} />}
+            <CollapseButton disabled={cannotCollapse(layout, 'editor')} onClick={() => togglePane('editor')} />
           </h2>
           <div className="editor" ref={editorHost} />
         </section>
         <div {...splitterProps('split')} />
-        <section className={`pane preview-pane ${collapsed.preview ? 'collapsed' : ''}`}>
+        <section className={`pane preview-pane ${collapsed.preview ? 'collapsed' : ''} ${plainText ? 'gone' : ''}`} aria-hidden={plainText}>
           {collapsed.preview && <CollapsedStrip title="Druckfahne" onExpand={() => togglePane('preview')} />}
           <h2>
             <span className="pane-title">Druckfahne</span>
@@ -952,7 +973,7 @@ export function App() {
             >
               {syncScroll ? <Link2 size={14} /> : <Link2Off size={14} />}
             </button>
-            <CollapseButton disabled={cannotCollapse(collapsed, 'preview')} onClick={() => togglePane('preview')} />
+            <CollapseButton disabled={cannotCollapse(layout, 'preview')} onClick={() => togglePane('preview')} />
           </h2>
           <Preview
             ref={previewRef}
@@ -976,7 +997,7 @@ export function App() {
               <MessagesSquare size={14} /> Chat
               {chatBusy.size > 0 && panel !== 'chat' && <span className="dot" title="Claude antwortet" />}
             </button>
-            <CollapseButton disabled={cannotCollapse(collapsed, 'side')} onClick={() => togglePane('side')} />
+            <CollapseButton disabled={cannotCollapse(layout, 'side')} onClick={() => togglePane('side')} />
           </div>
           {panel === 'chat' ? (
             <ChatPanel

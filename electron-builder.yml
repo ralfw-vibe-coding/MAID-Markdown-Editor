@@ -28,6 +28,14 @@ mac:
         CFBundleTypeExtensions:
           - md
           - markdown
+      # Reiner Text: MAID steht unter „Öffnen mit“, wird aber nicht von selbst Standardprogramm.
+      - CFBundleTypeName: Text
+        CFBundleTypeRole: Editor
+        LSHandlerRank: Alternate
+        LSItemContentTypes:
+          - public.plain-text
+        CFBundleTypeExtensions:
+          - txt
     UTImportedTypeDeclarations:
       - UTTypeIdentifier: net.daringfireball.markdown
         UTTypeDescription: Markdown

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cannotCollapse, clampSide, gridColumns, toggleCollapsed, type Collapsed } from './panes'
+import { cannotCollapse, clampSide, gridColumns, toggleCollapsed, withoutPreview, type Collapsed } from './panes'
 
 const open: Collapsed = { versions: true, editor: false, preview: false, side: false }
 
@@ -41,5 +41,19 @@ describe('Wegklappbare Spalten', () => {
     expect(clampSide(100, 1400)).toBe(260)
     expect(clampSide(1300, 1400)).toBe(1080)
     expect(clampSide(500, 1400)).toBe(500)
+  })
+})
+
+describe('Textmodus ohne Druckfahne', () => {
+  it('Manuskript nimmt den Platz der Druckfahne, ohne Streifen und Trenner', () => {
+    expect(gridColumns(withoutPreview(open), 0.4, 5, 360, 440, true)).toBe('30px 0px minmax(0, 1fr) 0px 0px 5px 360px')
+  })
+
+  it('war nur die Druckfahne offen, geht das Manuskript auf', () => {
+    expect(withoutPreview({ versions: true, editor: true, preview: false, side: true })).toEqual({ versions: true, editor: false, preview: true, side: true })
+  })
+
+  it('Manuskript lässt sich nicht wegklappen, wenn es als einzige Spalte bleibt', () => {
+    expect(cannotCollapse(withoutPreview({ versions: true, editor: false, preview: false, side: true }), 'editor')).toBe(true)
   })
 })

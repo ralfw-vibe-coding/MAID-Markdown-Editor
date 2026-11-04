@@ -64,6 +64,9 @@ function openPath(path: string) {
   else createWindow(path)
 }
 
+const MARKDOWN_FILTER = { name: 'Markdown', extensions: ['md', 'markdown'] }
+const TEXT_FILTER = { name: 'Text', extensions: ['txt'] }
+
 /** Links, die MAID an das Standardprogramm (Browser, Mail) weitergibt – nie Dateien oder Skripte. */
 function openExternalLink(url: string): void {
   try {
@@ -138,7 +141,7 @@ async function showOpenDialog() {
   const parent = BrowserWindow.getFocusedWindow()
   const options: OpenDialogOptions = {
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }],
+    filters: [{ name: 'Markdown und Text', extensions: ['md', 'markdown', 'txt'] }],
   }
   const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
   if (!result.canceled) for (const path of result.filePaths) openPath(path)
@@ -205,7 +208,7 @@ function registerIpc() {
   ipcMain.handle(channels.openDialog, async (e) => {
     const result = await dialog.showOpenDialog(senderWindow(e)!.win, {
       properties: ['openFile'],
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }],
+      filters: [{ name: 'Markdown und Text', extensions: ['md', 'markdown', 'txt'] }],
     })
     return result.canceled ? null : result.filePaths[0]
   })
@@ -213,7 +216,8 @@ function registerIpc() {
   ipcMain.handle(channels.saveDialog, async (e, suggestedName: string) => {
     const result = await dialog.showSaveDialog(senderWindow(e)!.win, {
       defaultPath: suggestedName,
-      filters: [{ name: 'Markdown', extensions: ['md'] }],
+      // Das Format des Dokuments zuerst: eine .txt bleibt beim „Sichern unter …“ Text.
+      filters: /\.txt$/i.test(suggestedName) ? [TEXT_FILTER, MARKDOWN_FILTER] : [MARKDOWN_FILTER, TEXT_FILTER],
     })
     return result.canceled ? null : result.filePath
   })
