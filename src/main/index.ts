@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { channels, LEGACY_VERSIONS_SUFFIX, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
+import { channels, isPlainTextPath, LEGACY_VERSIONS_SUFFIX, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
 import { askClaude, claudeInfo } from './ai'
 import { getSettings, updateSettings } from './settings'
 import { handleLocalFileScheme, registerLocalFileScheme, saveImage } from './images'
@@ -37,6 +37,17 @@ const senderWindow = (e: IpcMainEvent | IpcMainInvokeEvent) => windows.get(e.sen
 function focusedDocWindow(): DocWindow | undefined {
   const w = BrowserWindow.getFocusedWindow()
   return (w && windows.get(w.webContents.id)) || (lastFocusedId !== null ? windows.get(lastFocusedId) : undefined)
+}
+
+/** Hat das aktive Fenster ein Textdokument? Dann gibt es kein Format-Menü. */
+function focusedIsPlainText(): boolean {
+  return isPlainTextPath(focusedDocWindow()?.path ?? null)
+}
+
+/** Menü neu aufbauen, wenn sich das aktive Dokument zwischen Markdown und Text ändert. */
+let menuPlainText = false
+function updateMenuForFocus() {
+  if (focusedIsPlainText() !== menuPlainText) buildMenu()
 }
 
 /** Menübefehle gehen an das aktive Fenster. */
@@ -110,6 +121,7 @@ function createWindow(path?: string): DocWindow {
   lastFocusedId = id
   win.on('focus', () => {
     lastFocusedId = id
+    updateMenuForFocus()
   })
 
   win.on('close', async (e) => {
@@ -269,6 +281,7 @@ function registerIpc() {
     dw.win.setTitle(docName(dw))
     dw.win.setRepresentedFilename(state.path ?? '')
     dw.win.setDocumentEdited(state.dirty)
+    updateMenuForFocus()
   })
 
   ipcMain.on(channels.closeConfirmed, (e) => {
@@ -287,6 +300,20 @@ function registerIpc() {
 }
 
 function buildMenu() {
+  menuPlainText = focusedIsPlainText()
+  // Formatieren erzeugt Markdown – bei reinem Text gibt es das Menü nicht.
+  const format: MenuItemConstructorOptions = {
+    label: 'Format',
+    submenu: [
+      { label: 'Fett', accelerator: 'CmdOrCtrl+B', click: () => send('format:bold') },
+      { label: 'Kursiv', accelerator: 'CmdOrCtrl+I', click: () => send('format:italic') },
+      { label: 'Unterstrichen', accelerator: 'CmdOrCtrl+U', click: () => send('format:underline') },
+      { label: 'Durchgestrichen', accelerator: 'Shift+CmdOrCtrl+X', click: () => send('format:strike') },
+      { label: 'Hervorgehoben', accelerator: 'Shift+CmdOrCtrl+H', click: () => send('format:highlight') },
+      { type: 'separator' },
+      { label: 'Link einfügen', accelerator: 'CmdOrCtrl+K', click: () => send('format:link') },
+    ],
+  }
   const template: MenuItemConstructorOptions[] = [
     {
       label: app.name,
@@ -331,25 +358,24 @@ function buildMenu() {
         { role: 'pasteAndMatchStyle', label: 'Einsetzen und Stil anpassen' },
         { role: 'delete', label: 'Löschen' },
         { role: 'selectAll', label: 'Alles auswählen' },
-      ],
-    },
-    {
-      label: 'Format',
-      submenu: [
-        { label: 'Fett', accelerator: 'CmdOrCtrl+B', click: () => send('format:bold') },
-        { label: 'Kursiv', accelerator: 'CmdOrCtrl+I', click: () => send('format:italic') },
-        { label: 'Unterstrichen', accelerator: 'CmdOrCtrl+U', click: () => send('format:underline') },
-        { label: 'Durchgestrichen', accelerator: 'Shift+CmdOrCtrl+X', click: () => send('format:strike') },
-        { label: 'Hervorgehoben', accelerator: 'Shift+CmdOrCtrl+H', click: () => send('format:highlight') },
         { type: 'separator' },
-        { label: 'Link einfügen', accelerator: 'CmdOrCtrl+K', click: () => send('format:link') },
+        {
+          label: 'Suchen',
+          submenu: [
+            { label: 'Suchen …', accelerator: 'CmdOrCtrl+F', click: () => send('find:open') },
+            { label: 'Suchen und Ersetzen …', accelerator: 'Alt+CmdOrCtrl+F', click: () => send('find:replace') },
+            { label: 'Weitersuchen', accelerator: 'CmdOrCtrl+G', click: () => send('find:next') },
+            { label: 'Rückwärts suchen', accelerator: 'Shift+CmdOrCtrl+G', click: () => send('find:previous') },
+          ],
+        },
       ],
     },
+    ...(menuPlainText ? [] : [format]),
     {
       label: 'KI',
       submenu: [
         // Kommentar: an eine Stelle gebunden (Markierung oder Cursor). Chat: zum ganzen Dokument.
-        { label: 'Kommentar zur Druckfahne', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
+        { label: menuPlainText ? 'Kommentar zur Stelle' : 'Kommentar zur Druckfahne', accelerator: 'Shift+CmdOrCtrl+K', click: () => send('askAi') },
         { label: 'Chat mit Manuskript', accelerator: 'Shift+CmdOrCtrl+L', click: () => send('chat') },
       ],
     },

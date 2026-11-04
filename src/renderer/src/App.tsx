@@ -3,7 +3,7 @@ import { basicSetup } from 'codemirror'
 import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state'
 import { EditorView, keymap, type Command } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
-import { IMAGE_EXTENSIONS, LOCAL_FILE_SCHEME, type MaidHost } from '../../shared/host'
+import { IMAGE_EXTENSIONS, LOCAL_FILE_SCHEME, type FindCommand, type MaidHost } from '../../shared/host'
 import { imageExtension, imageMarkdown, setImageWidth } from './render/imageSize'
 import { buildPreview } from './render/buildPreview'
 import { Preview } from './render/Preview'
@@ -21,6 +21,7 @@ import {
 } from './anchor/anchors'
 import { sampleDoc } from './sampleDoc'
 import { markdownKeymap } from './editor/markdownKeymap'
+import { findPhrases, runFind } from './editor/find'
 import { useDocumentFile } from './doc/useDocumentFile'
 import { formatCommands, type FormatCommand } from './editor/format'
 import { FormatToolbar } from './editor/FormatToolbar'
@@ -236,6 +237,7 @@ export function App() {
     () => [
       basicSetup,
       markdownMode.of(MARKDOWN_MODE),
+      findPhrases,
       EditorView.lineWrapping,
       anchorField,
       anchorHistory,
@@ -732,6 +734,7 @@ export function App() {
         if (command === 'settings') setSettingsOpen(true)
         if (command === 'saveVersion') openVersionsRef.current()
         if (command === 'chat') newChatRef.current()
+        if (command.startsWith('find:') && viewRef.current) runFind(viewRef.current, command.slice(5) as FindCommand)
         if (command.startsWith('format:')) {
           // Nicht in Eingabefeldern (Chat, Kommentar) – dort gilt das Kürzel nicht dem Manuskript.
           const focus = document.activeElement

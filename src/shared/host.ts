@@ -10,7 +10,13 @@ export type OpenedFile = {
 /** Formatierungen im Manuskript (Menü „Format“, Tastenkürzel, Symbolleiste). */
 export type FormatCommand = 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'link'
 
-export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings' | 'saveVersion' | `format:${FormatCommand}`
+export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings' | 'saveVersion' | `format:${FormatCommand}` | `find:${FindCommand}`
+
+/** Suchen und Ersetzen im Manuskript. */
+export type FindCommand = 'open' | 'replace' | 'next' | 'previous'
+
+/** Textmodus: Dokumente mit der Endung .txt sind reiner Text, kein Markdown. */
+export const isPlainTextPath = (path: string | null) => !!path && /\.txt$/i.test(path)
 
 export type DiscardChoice = 'save' | 'discard' | 'cancel'
 
