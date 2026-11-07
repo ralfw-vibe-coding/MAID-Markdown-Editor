@@ -29,6 +29,9 @@ const PREVIEW_FONTS = [
   'New York', 'Literata', 'Source Serif 4', 'Merriweather',
   'Helvetica Neue', 'Avenir Next', 'Gill Sans', 'Optima', 'Futura', 'Seravek', 'Inter',
 ]
+/** Schreibzeile beim Einschalten: etwas oberhalb der Mitte. */
+const WRITING_LINE_DEFAULT = 40
+
 const EDITOR_FALLBACK = 'ui-monospace, Menlo, monospace'
 const PREVIEW_FALLBACK = 'Georgia, serif'
 
@@ -132,6 +135,35 @@ export function SettingsDialog({ host, settings, onChange, onClose }: Props) {
             </span>
           </label>
           <p className="hint">Nur wenn sich etwas geändert hat; 0 = aus. Zeigt deinen Schreibfortschritt im Zeitstrahl.</p>
+        </section>
+
+        <section>
+          <h4>Schreiben</h4>
+          <label>
+            <span>Schreibzeile</span>
+            <span className="check-row">
+              <input
+                type="checkbox"
+                checked={settings.writingLine > 0}
+                onChange={(e) => onChange({ writingLine: e.target.checked ? WRITING_LINE_DEFAULT : 0 })}
+              />
+              festhalten
+              {settings.writingLine > 0 && (
+                <>
+                  <input
+                    type="range"
+                    min={5}
+                    max={90}
+                    value={settings.writingLine}
+                    aria-label="Höhe der Schreibzeile"
+                    onChange={(e) => onChange({ writingLine: Number(e.target.value) })}
+                  />
+                  {settings.writingLine} % von oben
+                </>
+              )}
+            </span>
+          </label>
+          <p className="hint">Beim Tippen bleibt die Cursorzeile auf dieser Höhe, der Text rückt nach. ⌥⌘T hält sie dort fest, wo der Cursor gerade steht.</p>
         </section>
 
         <section>

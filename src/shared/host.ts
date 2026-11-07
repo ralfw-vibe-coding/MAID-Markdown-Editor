@@ -10,7 +10,7 @@ export type OpenedFile = {
 /** Formatierungen im Manuskript (Menü „Format“, Tastenkürzel, Symbolleiste). */
 export type FormatCommand = 'bold' | 'italic' | 'underline' | 'strike' | 'highlight' | 'link'
 
-export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings' | 'saveVersion' | `format:${FormatCommand}` | `find:${FindCommand}`
+export type MenuCommand = 'new' | 'open' | 'save' | 'saveAs' | 'saveAndClose' | 'askAi' | 'chat' | 'settings' | 'saveVersion' | 'writingLine' | `format:${FormatCommand}` | `find:${FindCommand}`
 
 /** Suchen und Ersetzen im Manuskript. */
 export type FindCommand = 'open' | 'replace' | 'next' | 'previous'
@@ -48,6 +48,8 @@ export type Settings = {
   autoSave: boolean
   /** Alle so viele Minuten eine Fassung festhalten, wenn sich etwas geändert hat; 0 = aus. */
   autoCommitMinutes: number
+  /** Schreibzeile: Höhe der Cursorzeile beim Tippen in Prozent des Manuskripts; 0 = aus. */
+  writingLine: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   previewFontSize: 17,
   autoSave: true,
   autoCommitMinutes: 15,
+  writingLine: 0,
 }
 
 export type ClaudeInfo = { path: string; version: string | null; error?: string }

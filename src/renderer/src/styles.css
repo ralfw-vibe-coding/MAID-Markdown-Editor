@@ -333,6 +333,7 @@ button.chat-title.editable:hover { background: #f1efe9; }
 .state-dot.busy { background: #f59e0b; }
 .modal .check-row { display: flex; align-items: center; gap: 6px; }
 .modal .check-row input[type="number"] { width: 56px; }
+.modal .check-row input[type="range"] { flex: 1; min-width: 80px; max-width: 160px; margin-left: 8px; accent-color: var(--accent); }
 
 /* Umbenennbare Titel (Fassungen) */
 .editable-title { cursor: text; border-radius: 3px; }

@@ -257,7 +257,13 @@ function registerIpc() {
 
   ipcMain.handle(channels.askAi, (_e, request: AiRequest) => askClaude(request))
   ipcMain.handle(channels.getSettings, () => getSettings())
-  ipcMain.handle(channels.setSettings, (_e, changes: Partial<Settings>) => updateSettings(changes))
+  ipcMain.handle(channels.setSettings, async (_e, changes: Partial<Settings>) => {
+    const before = getSettings().writingLine > 0
+    const settings = await updateSettings(changes)
+    // Häkchen bei „Schreibzeile hier festhalten“ nachziehen.
+    if (settings.writingLine > 0 !== before) buildMenu()
+    return settings
+  })
   ipcMain.handle(channels.claudeInfo, () => claudeInfo())
   // Fassungen unter altem Namen (.versions.json) werden gelesen und beim nächsten Schreiben ersetzt.
   ipcMain.handle(
@@ -382,6 +388,14 @@ function buildMenu() {
     {
       label: 'Darstellung',
       submenu: [
+        {
+          label: 'Schreibzeile hier festhalten',
+          type: 'checkbox',
+          checked: getSettings().writingLine > 0,
+          accelerator: 'Alt+CmdOrCtrl+T',
+          click: () => send('writingLine'),
+        },
+        { type: 'separator' },
         { role: 'reload', label: 'Neu laden' },
         { role: 'toggleDevTools', label: 'Entwicklerwerkzeuge' },
         { type: 'separator' },

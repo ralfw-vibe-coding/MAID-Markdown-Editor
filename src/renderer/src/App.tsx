@@ -22,6 +22,7 @@ import {
 import { sampleDoc } from './sampleDoc'
 import { markdownKeymap } from './editor/markdownKeymap'
 import { findPhrases, runFind } from './editor/find'
+import { cursorHeightPercent, writingLine } from './editor/writingLine'
 import { useDocumentFile } from './doc/useDocumentFile'
 import { formatCommands, type FormatCommand } from './editor/format'
 import { FormatToolbar } from './editor/FormatToolbar'
@@ -152,6 +153,9 @@ export function App() {
   /** Chats, in denen Claude gerade antwortet. */
   const [chatBusy, setChatBusy] = useState<ReadonlySet<string>>(new Set())
   const { settings, update: updateSettings } = useSettings(host)
+  /** Für den Editor, der einmal aufgebaut wird und die Einstellung beim Tippen liest. */
+  const writingLineRef = useRef(settings.writingLine)
+  writingLineRef.current = settings.writingLine
   const [settingsOpen, setSettingsOpen] = useState(false)
   /** In der Versionsspalte gewählte Version (Vergleich); null = aktueller Stand. */
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
@@ -238,6 +242,7 @@ export function App() {
       basicSetup,
       markdownMode.of(MARKDOWN_MODE),
       findPhrases,
+      writingLine(() => writingLineRef.current),
       EditorView.lineWrapping,
       anchorField,
       anchorHistory,
@@ -719,6 +724,17 @@ export function App() {
   threadFromEditorRef.current = threadFromEditor
   const newChatRef = useRef(() => {})
 
+  /** ⌥⌘T: Schreibzeile auf der Höhe festhalten, auf der der Cursor gerade steht – oder lösen. */
+  function toggleWritingLine() {
+    const view = viewRef.current
+    if (settings.writingLine > 0) return void updateSettings({ writingLine: 0 })
+    const percent = view && cursorHeightPercent(view)
+    if (percent) void updateSettings({ writingLine: percent })
+    view?.focus()
+  }
+  const toggleWritingLineRef = useRef(toggleWritingLine)
+  toggleWritingLineRef.current = toggleWritingLine
+
   /** Formatierung auf die Auswahl im Manuskript anwenden. */
   function applyFormat(cmd: FormatCommand) {
     const view = viewRef.current
@@ -734,6 +750,7 @@ export function App() {
         if (command === 'settings') setSettingsOpen(true)
         if (command === 'saveVersion') openVersionsRef.current()
         if (command === 'chat') newChatRef.current()
+        if (command === 'writingLine') toggleWritingLineRef.current()
         if (command.startsWith('find:') && viewRef.current) runFind(viewRef.current, command.slice(5) as FindCommand)
         if (command.startsWith('format:')) {
           // Nicht in Eingabefeldern (Chat, Kommentar) – dort gilt das Kürzel nicht dem Manuskript.

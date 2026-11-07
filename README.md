@@ -87,12 +87,13 @@ Bewusst festgehaltene Fassungen markieren, was dir etwas bedeutet; die automatis
 - **Formatieren** mit Menü „Format“, Symbolleiste und Kürzeln: Fett ⌘B, Kursiv ⌘I, Unterstrichen ⌘U, Durchgestrichen ⇧⌘X, Hervorgehoben ⇧⌘H (`==…==`), Link ⌘K.
 - **Bilder** per ⌘V oder Ziehen ins Manuskript; sie landen im Ordner `<Datei>.md - Images` neben dem Dokument (im Finder direkt darunter). In der Druckfahne lässt sich die Anzeigegröße mit einem Griff ziehen (gespeichert als `![Alt|300](…)` wie in Obsidian). Bilder werden nie aufgeräumt – jede alte Fassung findet ihre Bilder wieder.
 - **Mitlaufendes Scrollen** zwischen Manuskript und Druckfahne (Kette im Titel der Druckfahne); ein Klick in die Druckfahne setzt den Cursor an dieselbe Stelle im Manuskript.
+- **Schreibzeile** (⌥⌘T, „Darstellung → Schreibzeile hier festhalten“): Beim Tippen bleibt die Cursorzeile auf der Höhe, auf der sie beim Einschalten stand – der Text rückt nach, auch am Ende des Dokuments. Die Höhe lässt sich in den Einstellungen verschieben. Das Manuskript lässt sich immer über das Ende hinaus scrollen.
 - **Suchen und Ersetzen** im Manuskript: ⌘F, ⌥⌘F (gleich ins Ersetzen-Feld), ⌘G / ⇧⌘G weitersuchen; mit Groß/klein, ganzem Wort und regulären Ausdrücken. Menü „Bearbeiten → Suchen“.
 - **Links** in der Druckfahne öffnen mit einem Klick im Browser.
 - **Textdateien** (`.txt`): MAID zeigt dann nur das Manuskript, ohne Druckfahne, Markdown-Hervorhebung und Formatierung (auch das Menü „Format“ fehlt). Chat, Kommentare per ⇧⌘K und Fassungen funktionieren wie gewohnt; Claude weiß, dass es um reinen Text geht. Über „Sichern unter …“ lässt sich jedes Dokument als Markdown oder Text speichern. Im Finder steht MAID für `.txt` unter „Öffnen mit“, ist dafür aber nicht Standardprogramm.
 - **Mehrere Fenster**, eine Datei je Fenster.
 - **Spalten** lassen sich wegklappen und in der Breite ziehen.
-- **Einstellungen** (⌘,): Modell, Denkaufwand und Pfad der Claude CLI, Auto-Speichern, automatische Fassungen, Schriften für Manuskript und Druckfahne (mit Vorschau).
+- **Einstellungen** (⌘,): Modell, Denkaufwand und Pfad der Claude CLI, Auto-Speichern, automatische Fassungen, Schreibzeile, Schriften für Manuskript und Druckfahne (mit Vorschau).
 
 ## Dateien neben dem Dokument
 
