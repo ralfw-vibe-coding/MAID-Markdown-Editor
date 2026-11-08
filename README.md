@@ -31,8 +31,8 @@ Das Markdown bleibt dabei **sauber und portabel**: Kommentare, Chats und Fassung
 1. In der **Druckfahne** ein Wort, einen Halbsatz oder eine Passage markieren – oder im **Manuskript** markieren bzw. den Cursor setzen und **⇧⌘K** drücken („Kommentar zur Druckfahne“). Ohne Markierung entsteht eine *Einfügemarke*, z. B. am Textende.
 2. Kommentar schreiben und **„Mit KI besprechen“** (↩) – oder „Nur notieren“.
 3. Claude antwortet im Thread, fragt nach, schlägt Formulierungen vor. **Der Text bleibt dabei unverändert.**
-4. Erst wenn du es ausdrücklich verlangst – in eigenen Worten („mach das so“, „setz es um“) oder mit dem Knopf **„Umsetzen“** – führt Claude die besprochene Änderung aus.
-5. Die Änderung erscheint als **Wort-Diff** im Thread, mit **„Zurücknehmen“**; ⌘Z im Editor wirkt genauso. Der Thread hängt danach am neuen Text und das Gespräch kann weitergehen.
+4. Erst wenn du es ausdrücklich verlangst – in eigenen Worten („mach das so“, „setz es um“) oder mit dem Knopf **„Umsetzen“** – führt Claude die besprochene Änderung aus – oder alle besprochenen, wenn es mehrere sind („korrigiere alle Fehler in dem Absatz“).
+5. Jede Änderung erscheint als **Wort-Diff** im Thread, mit **„Zurücknehmen“**; ⌘Z im Editor nimmt alle Änderungen einer Antwort auf einmal zurück. Der Thread hängt danach am neuen Text und das Gespräch kann weitergehen.
 
 Die Zuordnung zwischen Druckfahne und Markdown ist **zeichengenau** – auch über Fettdruck, Links, Escapes, Umlaute und Emojis hinweg. Kommentare folgen ihrer Stelle, wenn davor geschrieben wird; wird die Datei außerhalb von MAID geändert, findet MAID die Stelle beim Öffnen über Wortlaut und Umgebung wieder – und markiert sie lieber als *verloren*, als sie an der falschen Stelle anzuheften.
 
@@ -43,7 +43,7 @@ Gehört eine besprochene Änderung an eine andere Stelle („füge das in Abschn
 **⇧⌘L** („Chat mit Manuskript“) öffnet einen neuen Chat im Seitenpanel. Claude kennt dabei immer den aktuellen Stand des **ganzen Dokuments** und deine **Markierung bzw. Cursorposition** im Manuskript – „Fasse das zusammen“, „Wo ist die Argumentation schwach?“, „Was hältst du von meiner Markierung?“.
 
 - Antworten erscheinen als formatiertes Markdown.
-- Auch im Chat ändert Claude nur **auf ausdrücklichen Auftrag** („kürz die Markierung“), an der Markierung, an der Cursorposition oder an einer eindeutigen Stelle – mit Diff und „Zurücknehmen“.
+- Auch im Chat ändert Claude nur **auf ausdrücklichen Auftrag** („kürz die Markierung“), an der Markierung, an der Cursorposition oder an eindeutigen Stellen – auch an vielen auf einmal („korrigiere alle Tippfehler“), mit Diff und „Zurücknehmen“ je Stelle.
 - Es gibt beliebig viele Chats; Claude gibt jedem einen Titel aus dem Inhalt, du kannst ihn ändern. Alte Chats bleiben erhalten und lassen sich wieder öffnen.
 
 ### Claude hält Fassungen fest

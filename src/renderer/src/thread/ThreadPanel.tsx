@@ -3,7 +3,7 @@ import { GitCommitHorizontal, X } from 'lucide-react'
 import { ConfirmDeleteButton } from '../layout/ConfirmDeleteButton'
 import type { Anchor } from '../anchor/anchors'
 import { diffWords } from './diffWords'
-import { occursOnce, type Message, type Thread } from './thread'
+import { checkedAtAnchor, lastEdits, occursOnce, type Message, type Thread } from './thread'
 
 type Props = {
   doc: string
@@ -92,7 +92,8 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
     setDraft('')
   }
   // Die zuletzt ausgeführte Änderung kann im Thread zurückgenommen werden.
-  const lastEdit = [...thread.messages].reverse().find((m) => m.kind === 'edit')
+  // Zurücknehmen geht für die Änderungen der letzten Antwort, die etwas geändert hat.
+  const batch = lastEdits(thread.messages)
 
   return (
     <div
@@ -114,11 +115,13 @@ function Chat(props: Props & { thread: Thread; anchor: Anchor }) {
 
       <div className="messages" ref={scroller}>
         {thread.messages.map((m) => {
-          // Zurücknehmen geht nur, solange genau der eingesetzte Text an der Stelle steht.
-          const current = m === lastEdit && m.kind === 'edit' && !m.reverted
+          // … und nur, solange genau der eingesetzte Text an der Stelle steht.
+          const current = m.kind === 'edit' && !m.reverted && batch.includes(m)
           const intact =
             current &&
-            (m.elsewhere ? occursOnce(doc, m.after) : (anchor.from < anchor.to || !!anchor.point) && doc.slice(anchor.from, anchor.to) === m.after)
+            (checkedAtAnchor(m, batch)
+              ? (anchor.from < anchor.to || !!anchor.point) && doc.slice(anchor.from, anchor.to) === m.after
+              : occursOnce(doc, m.after))
           return (
             <MessageView
               key={m.id}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildPrompt, parseAnswer, SYSTEM_PROMPT } from './lektor'
 import { forDocument, isPlainTextPath } from './plainText'
-import { minimalChange, planEdit } from './planEdit'
+import { minimalChange, placedRanges, planEdit, planEdits } from './planEdit'
 import { diffWords } from '../thread/diffWords'
 import { message } from '../thread/thread'
 
@@ -23,17 +23,22 @@ describe('Prompt für den Lektor', () => {
   })
 
   it('entfernt Markierungszeichen aus der Antwort', () => {
-    const a = parseAnswer({ reply: 'ok', edit: true, oldText: '⟦absolut sicher⟧', newText: 'sehr wahrscheinlich' })
-    expect(a.edit).toEqual({ oldText: 'absolut sicher', newText: 'sehr wahrscheinlich' })
+    const a = parseAnswer({ reply: 'ok', edits: [{ oldText: '⟦absolut sicher⟧', newText: 'sehr wahrscheinlich' }] })
+    expect(a.edits).toEqual([{ oldText: 'absolut sicher', newText: 'sehr wahrscheinlich' }])
+  })
+
+  it('mehrere Änderungen in einer Antwort', () => {
+    const a = parseAnswer({ reply: 'ok', edits: [{ oldText: 'a', newText: 'b' }, { oldText: 'c', newText: 'd' }, { oldText: 'kaputt' }] })
+    expect(a.edits).toEqual([{ oldText: 'a', newText: 'b' }, { oldText: 'c', newText: 'd' }])
   })
 
   it('ohne Auftrag keine Änderung', () => {
-    expect(parseAnswer({ reply: 'Vorschlag: „sehr wahrscheinlich“', edit: false, oldText: '', newText: '' }).edit).toBeNull()
+    expect(parseAnswer({ reply: 'Vorschlag: „sehr wahrscheinlich“', edits: [] }).edits).toEqual([])
   })
 
   it('Fassung auf Wunsch, auch ohne Änderung', () => {
-    expect(parseAnswer({ reply: 'Halte fest.', edit: false, oldText: '', newText: '', fassung: 'Erster Entwurf komplett' }).fassung).toBe('Erster Entwurf komplett')
-    expect(parseAnswer({ reply: 'ok', edit: false, oldText: '', newText: '' }).fassung).toBeNull()
+    expect(parseAnswer({ reply: 'Halte fest.', edits: [], fassung: 'Erster Entwurf komplett' }).fassung).toBe('Erster Entwurf komplett')
+    expect(parseAnswer({ reply: 'ok', edits: [] }).fassung).toBeNull()
   })
 })
 
@@ -159,5 +164,51 @@ describe('Textmodus (.txt)', () => {
   it('sagt Claude nur bei reinem Text, dass es kein Markdown ist', () => {
     expect(forDocument(SYSTEM_PROMPT, false)).toBe(SYSTEM_PROMPT)
     expect(forDocument(SYSTEM_PROMPT, true)).toContain('reiner Text')
+  })
+})
+
+describe('Mehrere Änderungen planen', () => {
+  const doc = 'Der Hund belllt. Die Katze miaut. Der Vogl singt.'
+  const nowhere = { from: 0, to: 0 }
+  const apply = (plans: { from: number; to: number; insert: string }[]) =>
+    [...plans].reverse().reduce((d, p) => d.slice(0, p.from) + p.insert + d.slice(p.to), doc)
+
+  it('plant alle Korrekturen, sortiert nach Position', () => {
+    const { plans, errors } = planEdits(doc, nowhere, [
+      { oldText: 'Der Vogl singt.', newText: 'Der Vogel singt.' },
+      { oldText: 'Der Hund belllt.', newText: 'Der Hund bellt.' },
+    ])
+    expect(errors).toEqual([])
+    expect(apply(plans)).toBe('Der Hund bellt. Die Katze miaut. Der Vogel singt.')
+  })
+
+  it('neue Positionen der eingesetzten Texte', () => {
+    const { plans } = planEdits(doc, nowhere, [
+      { oldText: 'Hund belllt', newText: 'Hund bellt' },
+      { oldText: 'Vogl', newText: 'Vogel' },
+    ])
+    const after = apply(plans)
+    expect(placedRanges(plans).map((r) => after.slice(r.from, r.to))).toEqual(['Hund bellt', 'Vogel'])
+  })
+
+  it('führt aus, was geht, und meldet den Rest', () => {
+    const { plans, errors } = planEdits(doc, nowhere, [
+      { oldText: 'Der Vogl singt.', newText: 'Der Vogel singt.' },
+      { oldText: 'Das Pferd', newText: 'Das Ross' },
+      { oldText: 'Vogl singt', newText: 'Vogel pfeift' },
+    ])
+    expect(plans).toHaveLength(1)
+    expect(errors).toHaveLength(2)
+    expect(errors[0]).toContain('kommt im Dokument nicht vor')
+    expect(errors[0]).not.toContain('Nichts geändert')
+    expect(errors[1]).toContain('überschneidet sich')
+  })
+
+  it('an einer Markierung: Vorkommen darin haben Vorrang', () => {
+    const d = 'Der Hund. Der Hund. Der Hund.'
+    const sel = { from: 10, to: 19 }
+    const { plans } = planEdits(d, sel, [{ oldText: 'Hund', newText: 'Dackel' }])
+    expect(plans[0].from).toBe(14)
+    expect(plans[0].elsewhere).toBeUndefined()
   })
 })

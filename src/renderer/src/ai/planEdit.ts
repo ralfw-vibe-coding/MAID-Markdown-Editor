@@ -51,6 +51,44 @@ export function planEdit(
   return { error: `Der zu ersetzende Text („${excerpt(oldText)}“) kommt im Dokument nicht vor – vermutlich wurde er inzwischen geändert. Nichts geändert.` }
 }
 
+export type EditRequest = { oldText: string; newText: string }
+
+/**
+ * Plant mehrere Änderungen aus einer Antwort, alle bezogen auf dasselbe
+ * (unveränderte) Dokument. Was sich nicht planen lässt oder sich mit einer
+ * schon geplanten Änderung überschneidet, wird ausgelassen und gemeldet –
+ * die übrigen werden trotzdem ausgeführt. Ergebnis nach Position sortiert.
+ */
+export function planEdits(
+  doc: string,
+  anchor: { from: number; to: number; point?: boolean },
+  edits: EditRequest[],
+): { plans: EditPlan[]; errors: string[] } {
+  const plans: EditPlan[] = []
+  const errors: string[] = []
+  // Bei mehreren Änderungen stimmt „Nichts geändert.“ nicht – die anderen werden ausgeführt.
+  const say = (error: string) => (edits.length > 1 ? error.replace(/\s*Nichts geändert\.$/, '') : error)
+  for (const e of edits) {
+    const plan = planEdit(doc, anchor, e.oldText, e.newText)
+    if ('error' in plan) errors.push(say(plan.error))
+    else if (plans.some((p) => overlaps(p, plan))) errors.push(`Die Änderung an „${excerpt(e.oldText || e.newText)}“ überschneidet sich mit einer anderen.`)
+    else plans.push(plan)
+  }
+  return { plans: plans.sort((a, b) => a.from - b.from), errors }
+}
+
+const overlaps = (a: EditPlan, b: EditPlan) => (a.from < b.to && b.from < a.to) || (a.from === a.to && b.from === b.to && a.from === b.from)
+
+/** Wo die eingesetzten Texte nach dem Ausführen aller (sortierten, überschneidungsfreien) Änderungen stehen. */
+export function placedRanges(plans: EditPlan[]): { from: number; to: number }[] {
+  let shift = 0
+  return plans.map((p) => {
+    const from = p.from + shift
+    shift += p.insert.length - (p.to - p.from)
+    return { from, to: from + p.insert.length }
+  })
+}
+
 const excerpt = (s: string) => (s.length > 60 ? `${s.slice(0, 57).trimEnd()} …` : s).replace(/\s+/g, ' ')
 
 /**

@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquarePlus, X } from 'lucide-react'
 import { buildPreview } from '../render/buildPreview'
 import { Preview } from '../render/Preview'
-import { occursOnce } from '../thread/thread'
+import { lastEdits, occursOnce } from '../thread/thread'
 import { MessageView } from '../thread/ThreadPanel'
 import { ConfirmDeleteButton } from '../layout/ConfirmDeleteButton'
 import { UNTITLED, type Chat } from './chats'
@@ -74,7 +74,8 @@ function ChatView(props: Props & { chat: Chat }) {
     if (el) el.scrollTop = el.scrollHeight
   }, [chat.id, messages.length, busy])
 
-  const lastEdit = messages.findLast((m) => m.kind === 'edit')
+  // Zurücknehmen geht für die Änderungen der letzten Antwort, die etwas geändert hat.
+  const batch = lastEdits(messages)
 
   const send = () => {
     if (!draft.trim() || busy || !aiAvailable) return
@@ -125,8 +126,8 @@ function ChatView(props: Props & { chat: Chat }) {
               m={m}
               showWhere={false}
               // Zurücknehmen geht, solange der eingesetzte Text eindeutig im Dokument steht.
-              canRevert={m === lastEdit && !m.reverted && occursOnce(doc, m.after) && !busy}
-              editedSince={m === lastEdit && !m.reverted && !occursOnce(doc, m.after)}
+              canRevert={batch.includes(m) && !m.reverted && occursOnce(doc, m.after) && !busy}
+              editedSince={batch.includes(m) && !m.reverted && !occursOnce(doc, m.after)}
               onRevert={() => onRevert(chat.id, m.id)}
             />
           ),

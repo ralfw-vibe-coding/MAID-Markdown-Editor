@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createThread, message, syncEditStates, type Thread } from './thread'
+import { checkedAtAnchor, createThread, lastEdits, message, syncEditStates, type Thread } from './thread'
 
-function threadWithEdits(...edits: { before: string; after: string; reverted?: boolean; elsewhere?: boolean }[]): Thread {
+function threadWithEdits(...edits: { before: string; after: string; reverted?: boolean; elsewhere?: boolean; batch?: string }[]): Thread {
   const t = createThread('t', 'Zu absolut.')
   for (const e of edits) t.messages.push(message({ kind: 'edit', ...e }))
   return t
@@ -44,5 +44,33 @@ describe('Änderungen an anderer Stelle abgleichen', () => {
     const undone = syncEditStates(ts, () => 'Anker', 'Text. Leitsatz. Mehr.')
     expect(editStates(undone)).toEqual([true])
     expect(editStates(syncEditStates(undone, () => 'Anker', 'Text. Leitsatz. Neuer Satz. Mehr.'))).toEqual([false])
+  })
+})
+
+describe('Mehrere Änderungen aus einer Antwort', () => {
+  const doc = 'Der Hund bellt. Die Katze miaut. Der Vogel singt.'
+  const undone = 'Der Hund belllt. Die Katze miaut. Der Vogl singt.'
+  const batch = [
+    { before: 'Der Hund belllt.', after: 'Der Hund bellt.', batch: 'b1' },
+    { before: 'Der Vogl singt.', after: 'Der Vogel singt.', batch: 'b1', elsewhere: true },
+  ]
+
+  it('gehören zusammen und sind die letzten Änderungen', () => {
+    const t = threadWithEdits({ before: 'x', after: 'y' }, ...batch)
+    expect(lastEdits(t.messages).map((m) => m.after)).toEqual(['Der Hund bellt.', 'Der Vogel singt.'])
+  })
+
+  it('⌘Z nimmt alle zurück, Redo führt alle wieder aus – auch die am Anker, wenn es mehrere sind', () => {
+    const ts = [threadWithEdits({ ...batch[0], elsewhere: false }, { ...batch[1], elsewhere: false })]
+    const back = syncEditStates(ts, () => 'Anker', undone)
+    expect(editStates(back)).toEqual([true, true])
+    expect(editStates(syncEditStates(back, () => 'Anker', doc))).toEqual([false, false])
+  })
+
+  it('eine einzige Änderung am Anker wird weiter am Anker geprüft', () => {
+    const t = threadWithEdits(...batch)
+    const [atAnchor, elsewhere] = lastEdits(t.messages)
+    expect(checkedAtAnchor(atAnchor, [atAnchor, elsewhere])).toBe(true)
+    expect(checkedAtAnchor(elsewhere, [atAnchor, elsewhere])).toBe(false)
   })
 })

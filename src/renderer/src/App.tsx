@@ -59,11 +59,23 @@ import {
   withoutPreview,
   type PaneId,
 } from './layout/panes'
-import { appendMessage, createThread, message, syncEditStates, syncLastEdit, updateThread, type Message, type NewMessage, type Thread } from './thread/thread'
+import {
+  appendMessage,
+  checkedAtAnchor,
+  createThread,
+  lastEdits,
+  message,
+  syncEditStates,
+  syncLastEdits,
+  updateThread,
+  type Message,
+  type NewMessage,
+  type Thread,
+} from './thread/thread'
 import { ThreadPanel } from './thread/ThreadPanel'
 import { buildPrompt, parseAnswer, RESPONSE_SCHEMA, SYSTEM_PROMPT, type AskMode } from './ai/lektor'
 import { forDocument, isPlainTextPath } from './ai/plainText'
-import { minimalChange, planEdit } from './ai/planEdit'
+import { minimalChange, placedRanges, planEdits, type EditPlan, type EditRequest } from './ai/planEdit'
 
 declare global {
   interface Window {
@@ -132,6 +144,21 @@ function saveSplit(v: number) {
   } catch {
     // ohne Speicher bleibt die Breite nur bis zum Neuladen
   }
+}
+
+type DoneEdit = { before: string; after: string; elsewhere: boolean }
+type EditOutcome = { done: DoneEdit[]; errors: string[] }
+
+const doneEdits = (text: string, plans: EditPlan[]): DoneEdit[] =>
+  plans.map((p) => ({ before: text.slice(p.from, p.to), after: p.insert, elsewhere: !!p.elsewhere }))
+
+/** Verlaufseinträge zu einer KI-Antwort: jede Änderung einzeln, mehrere mit gemeinsamer Kennung. */
+function editMessages(done: DoneEdit[], errors: string[]): NewMessage[] {
+  const batch = done.length > 1 ? crypto.randomUUID() : undefined
+  return [
+    ...done.map((d): NewMessage => ({ kind: 'edit', ...d, ...(batch ? { batch } : {}) })),
+    ...errors.map((e): NewMessage => ({ kind: 'error', text: `Nicht ausgeführt: ${e}` })),
+  ]
 }
 
 export function App() {
@@ -220,7 +247,7 @@ export function App() {
     setChats((cs) => {
       let changed = false
       const next = cs.map((c) => {
-        const messages = syncLastEdit(c.messages, null, doc)
+        const messages = syncLastEdits(c.messages, null, doc)
         if (messages === c.messages) return c
         changed = true
         return { ...c, messages }
@@ -594,36 +621,40 @@ export function App() {
   const currentAnchor = (id: string) => viewRef.current?.state.field(anchorField).find((a) => a.id === id)
 
   /**
-   * Ersetzt `oldText` durch `newText` an der Stelle des Threads – als eine
-   * Editor-Transaktion (ein Undo-Schritt). Der Anker wird explizit auf den
-   * Ersatztext gesetzt. Liefert den ersetzten Text oder eine Fehlermeldung.
+   * Führt Änderungen an der Stelle eines Threads aus – alle zusammen als eine
+   * Editor-Transaktion (ein Undo-Schritt). Betrifft genau eine Änderung die
+   * kommentierte Stelle, sitzt der Anker danach auf ihrem Ersatztext; betreffen
+   * sie mehrere, umfasst er die Stelle samt allen. `moveAnchor: false` lässt den
+   * Anker einfach mitwandern (Rücknahme einer von mehreren Änderungen).
    */
-  function replaceAtAnchor(id: string, oldText: string, newText: string): { before: string; elsewhere: boolean } | { error: string } {
+  function editAtAnchor(id: string, edits: EditRequest[], moveAnchor = true): EditOutcome {
     const view = viewRef.current
     const anchor = currentAnchor(id)
-    if (!view || !anchor) return { error: 'Der Thread hat keine Stelle mehr im Dokument.' }
+    if (!view || !anchor) return { done: [], errors: ['Der Thread hat keine Stelle mehr im Dokument.'] }
     const text = view.state.doc.toString()
-    const plan = planEdit(text, anchor, oldText, newText)
-    if ('error' in plan) return plan
-    const change = minimalChange(text, plan)
-    const changes = { from: change.from, to: change.to, insert: change.insert }
-    if (plan.elsewhere) {
-      // Änderung an anderer Stelle: Anker bleibt, die Stelle wird im Manuskript gezeigt.
-      view.dispatch({
-        changes,
-        selection: { anchor: plan.from, head: plan.from + newText.length },
-        scrollIntoView: true,
-        userEvent: 'input.maid',
-      })
+    const { plans, errors } = planEdits(text, anchor, edits)
+    if (!plans.length) return { done: [], errors }
+    const changes = view.state.changes(plans.map((p) => minimalChange(text, p)))
+    const ranges = placedRanges(plans)
+    const atAnchor = ranges.filter((_, i) => !plans[i].elsewhere)
+    if (atAnchor.length === 0) {
+      // Nur an anderen Stellen geändert: Anker bleibt, die (erste) Stelle wird im Manuskript gezeigt.
+      view.dispatch({ changes, selection: { anchor: ranges[0].from, head: ranges[0].to }, scrollIntoView: true, userEvent: 'input.maid' })
+    } else if (!moveAnchor) {
+      view.dispatch({ changes, userEvent: 'input.maid' })
     } else {
+      const only = atAnchor.length === 1 ? atAnchor[0] : null
+      const from = only ? only.from : Math.min(changes.mapPos(anchor.from, 1), ...atAnchor.map((r) => r.from))
+      const to = only ? only.to : Math.max(changes.mapPos(anchor.to, -1), ...atAnchor.map((r) => r.to))
+      const quote = changes.apply(view.state.doc).sliceString(from, to)
       view.dispatch({
         changes,
         // Wird der Text ganz entfernt (z. B. Rücknahme einer Einfügung), bleibt eine Einfügemarke.
-        effects: placeAnchor.of({ id, from: plan.from, to: plan.from + newText.length, point: newText === '', quote: newText, status: 'ok' }),
+        effects: placeAnchor.of({ id, from, to, point: from === to, quote, status: 'ok' }),
         userEvent: 'input.maid',
       })
     }
-    return { before: text.slice(plan.from, plan.to), elsewhere: !!plan.elsewhere }
+    return { done: doneEdits(text, plans), errors }
   }
 
   async function askAi(id: string, mode: AskMode) {
@@ -647,15 +678,10 @@ export function App() {
       const answer = parseAnswer(result.data)
       appendTo(id, { kind: 'ai', text: answer.reply })
       // Erst festhalten, dann ändern – die Fassung ist der Stand vor der Änderung.
-      if (answer.fassung) appendTo(id, await holdFassungForAi(answer.fassung, !!answer.edit))
-      if (answer.edit) {
-        const done = replaceAtAnchor(id, answer.edit.oldText, answer.edit.newText)
-        appendTo(
-          id,
-          'error' in done
-            ? { kind: 'error', text: `Nicht ausgeführt: ${done.error}` }
-            : { kind: 'edit', before: done.before, after: answer.edit.newText, elsewhere: done.elsewhere },
-        )
+      if (answer.fassung) appendTo(id, await holdFassungForAi(answer.fassung, answer.edits.length > 0))
+      if (answer.edits.length) {
+        const { done, errors } = editAtAnchor(id, answer.edits)
+        for (const m of editMessages(done, errors)) appendTo(id, m)
       }
     } catch (err) {
       appendTo(id, { kind: 'error', text: (err as Error).message })
@@ -676,10 +702,11 @@ export function App() {
   }
 
   function revert(id: string, messageId: string) {
-    const m = threadsRef.current.find((t) => t.id === id)?.messages.find((x) => x.id === messageId)
+    const messages = threadsRef.current.find((t) => t.id === id)?.messages ?? []
+    const m = messages.find((x) => x.id === messageId)
     if (!m || m.kind !== 'edit') return
-    const done = replaceAtAnchor(id, m.after, m.before)
-    if ('error' in done) return appendTo(id, { kind: 'error', text: done.error })
+    const { done, errors } = editAtAnchor(id, [{ oldText: m.after, newText: m.before }], checkedAtAnchor(m, lastEdits(messages)))
+    if (!done.length) return appendTo(id, { kind: 'error', text: errors[0] ?? 'Nicht zurückgenommen.' })
     setThreads((ts) =>
       updateThread(ts, id, (t) => ({ ...t, messages: t.messages.map((x) => (x.id === messageId ? { ...x, reverted: true } : x)) })),
     )
@@ -822,17 +849,11 @@ export function App() {
       if (!result.ok) return appendToChat(id, message({ kind: 'error', text: result.error }))
       const answer = parseChatAnswer(result.data)
       setChats((cs) => updateChat(cs, id, (c) => suggestTitle({ ...c, messages: [...c.messages, message({ kind: 'ai', text: answer.reply })] }, answer.title)))
-      if (answer.fassung) appendToChat(id, message(await holdFassungForAi(answer.fassung, !!answer.edit)))
-      if (answer.edit) {
-        const { oldText, newText } = answer.edit
-        const done = applyChatEdit(oldText, newText, chatFocusRef.current.get(id) ?? null)
+      if (answer.fassung) appendToChat(id, message(await holdFassungForAi(answer.fassung, answer.edits.length > 0)))
+      if (answer.edits.length) {
+        const { done, errors } = applyChatEdits(answer.edits, chatFocusRef.current.get(id) ?? null)
         // Chat-Änderungen sind an keinen Anker gebunden; ihr Status wird im ganzen Dokument geprüft.
-        appendToChat(
-          id,
-          'error' in done
-            ? message({ kind: 'error', text: `Nicht ausgeführt: ${done.error}` })
-            : message({ kind: 'edit', before: done.before, after: newText, elsewhere: true }),
-        )
+        for (const m of editMessages(done.map((d) => ({ ...d, elsewhere: true })), errors)) appendToChat(id, message(m))
       }
     } catch (err) {
       appendToChat(id, message({ kind: 'error', text: (err as Error).message }))
@@ -862,31 +883,32 @@ export function App() {
   newChatRef.current = newChat
 
   /**
-   * Führt eine Chat-Änderung aus: an der Markierung bzw. Cursorposition, sonst an
-   * einer eindeutigen Textstelle. Die geänderte Stelle wird im Manuskript markiert.
+   * Führt Chat-Änderungen aus – an der Markierung bzw. Cursorposition, sonst an
+   * eindeutigen Textstellen; alle zusammen als ein Undo-Schritt. Die (erste)
+   * geänderte Stelle wird im Manuskript markiert.
    */
-  function applyChatEdit(oldText: string, newText: string, focus: EditorFocus | null): { before: string } | { error: string } {
+  function applyChatEdits(edits: EditRequest[], focus: EditorFocus | null): EditOutcome {
     const view = viewRef.current
-    if (!view) return { error: 'Kein Editor.' }
+    if (!view) return { done: [], errors: ['Kein Editor.'] }
     const text = view.state.doc.toString()
     const target = focus ? { ...focus, point: focus.from === focus.to } : { from: 0, to: 0 }
-    const plan = planEdit(text, target, oldText, newText)
-    if ('error' in plan) return plan
-    const change = minimalChange(text, plan)
+    const { plans, errors } = planEdits(text, target, edits)
+    if (!plans.length) return { done: [], errors }
+    const [first] = placedRanges(plans)
     view.dispatch({
-      changes: { from: change.from, to: change.to, insert: change.insert },
-      selection: { anchor: plan.from, head: plan.from + newText.length },
+      changes: plans.map((p) => minimalChange(text, p)),
+      selection: { anchor: first.from, head: first.to },
       scrollIntoView: true,
       userEvent: 'input.maid',
     })
-    return { before: text.slice(plan.from, plan.to) }
+    return { done: doneEdits(text, plans), errors }
   }
 
   function revertChatEdit(id: string, messageId: string) {
     const m = chats.find((c) => c.id === id)?.messages.find((x) => x.id === messageId)
     if (!m || m.kind !== 'edit') return
-    const done = applyChatEdit(m.after, m.before, null)
-    if ('error' in done) return appendToChat(id, message({ kind: 'error', text: `Nicht zurückgenommen: ${done.error}` }))
+    const { done, errors } = applyChatEdits([{ oldText: m.after, newText: m.before }], null)
+    if (!done.length) return appendToChat(id, message({ kind: 'error', text: `Nicht zurückgenommen: ${errors[0] ?? ''}` }))
     setChats((cs) => updateChat(cs, id, (c) => ({ ...c, messages: c.messages.map((x) => (x.id === messageId ? { ...x, reverted: true } : x)) })))
   }
 

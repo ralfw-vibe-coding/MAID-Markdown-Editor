@@ -31,16 +31,15 @@ describe('Prompt für den freien Chat', () => {
 
   it('lehnt Antworten ohne Text ab', () => {
     expect(() => parseChatAnswer({})).toThrow()
-    expect(parseChatAnswer({ reply: '**ok**', edit: false, oldText: '', newText: '' })).toEqual({ reply: '**ok**', edit: null, title: undefined, fassung: null })
-    expect(parseChatAnswer({ reply: 'gekürzt', edit: true, oldText: 'Erster Absatz.', newText: 'Erstes.' }).edit).toEqual({
-      oldText: 'Erster Absatz.',
-      newText: 'Erstes.',
-    })
+    expect(parseChatAnswer({ reply: '**ok**', edits: [] })).toEqual({ reply: '**ok**', edits: [], title: undefined, fassung: null })
+    expect(parseChatAnswer({ reply: 'gekürzt', edits: [{ oldText: 'Erster Absatz.', newText: 'Erstes.' }] }).edits).toEqual([
+      { oldText: 'Erster Absatz.', newText: 'Erstes.' },
+    ])
   })
 
   it('Fassung vor der Änderung: Bezeichnung oder nichts', () => {
-    expect(parseChatAnswer({ reply: 'ok', edit: true, oldText: 'a', newText: 'b', fassung: '  Vor dem Kürzen  ' }).fassung).toBe('Vor dem Kürzen')
-    expect(parseChatAnswer({ reply: 'ok', edit: false, oldText: '', newText: '', fassung: ' ' }).fassung).toBeNull()
+    expect(parseChatAnswer({ reply: 'ok', edits: [{ oldText: 'a', newText: 'b' }], fassung: '  Vor dem Kürzen  ' }).fassung).toBe('Vor dem Kürzen')
+    expect(parseChatAnswer({ reply: 'ok', edits: [], fassung: ' ' }).fassung).toBeNull()
   })
 
   it('Fassungen stehen im Verlauf', () => {
