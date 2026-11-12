@@ -1,4 +1,4 @@
-// Installiert die gebaute MAID.app (aus `npm run dist`) nach /Applications und
+// Installiert die gebaute MAID.app (aus `npm run package`) nach /Applications und
 // macht sie zum Standardprogramm für Markdown (.md, .markdown).
 // Eine laufende installierte MAID wird vorher sauber beendet (sie speichert dabei).
 import { execFileSync } from 'node:child_process'
@@ -13,7 +13,7 @@ const LSREGISTER = '/System/Library/Frameworks/CoreServices.framework/Frameworks
 const dist = join(import.meta.dirname, '..', 'dist')
 const source = ['mac-arm64', 'mac', 'mac-universal'].map((d) => join(dist, d, 'MAID.app')).find(existsSync)
 if (!source) {
-  console.error('install-app: dist/mac*/MAID.app fehlt – erst `npm run dist`')
+  console.error('install-app: dist/mac*/MAID.app fehlt – erst `npm run package`')
   process.exit(1)
 }
 

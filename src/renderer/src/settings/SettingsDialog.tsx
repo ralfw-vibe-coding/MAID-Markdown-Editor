@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { FontPicker } from './FontPicker'
-import type { ClaudeInfo, MaidHost, Settings } from '../../../shared/host'
+import { asUpdateState, type ClaudeInfo, type MaidHost, type Settings, type UpdateState } from '../../../shared/host'
 
 const MODELS = [
   { value: '', label: 'Standard der Claude CLI' },
@@ -166,6 +166,8 @@ export function SettingsDialog({ host, settings, onChange, onClose }: Props) {
           <p className="hint">Beim Tippen bleibt die Cursorzeile auf dieser Höhe, der Text rückt nach. ⌥⌘T hält sie dort fest, wo der Cursor gerade steht.</p>
         </section>
 
+        <UpdateSection host={host} />
+
         <section>
           <h4>Schrift</h4>
           <FontRow
@@ -221,3 +223,82 @@ function FontRow(props: {
     </div>
   )
 }
+
+/**
+ * Aktualisierung aus einem Ordner (meist ein geteilter Dropbox-Ordner). Nur in
+ * der installierten App; MAID aus dem Repo und die Web-Vorschau zeigen nichts.
+ */
+function UpdateSection({ host }: { host: MaidHost | null }) {
+  const [update, setUpdate] = useState<UpdateState>({ state: 'unavailable' })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!host) return
+    void host.updateState().then((s) => setUpdate(asUpdateState(s)))
+    return host.onUpdate((s) => setUpdate(asUpdateState(s)))
+  }, [host])
+  if (!host || update.state === 'unavailable') return null
+
+  const act = (f: () => Promise<UpdateState>) => {
+    setBusy(true)
+    void f()
+      .then((s) => setUpdate(asUpdateState(s)))
+      .finally(() => setBusy(false))
+  }
+  const folder = update.state === 'off' ? null : update.folder
+  const installing = update.state === 'installing'
+
+  return (
+    <section>
+      <h4>Aktualisierung</h4>
+      <div className="field">
+        <span>Update-Ordner</span>
+        <span className="update-row">
+          <button disabled={busy || installing} onClick={() => act(() => host.updateFolder(true))}>
+            Ordner wählen …
+          </button>
+          <button disabled={busy || installing || !folder} onClick={() => act(() => host.checkForUpdate())}>
+            Jetzt prüfen
+          </button>
+          <button disabled={busy || installing || !folder} onClick={() => act(() => host.updateFolder(null))}>
+            Update-Ordner entfernen
+          </button>
+        </span>
+      </div>
+      <p className="hint update-status">
+        {busy && !installing ? 'Prüfe …' : <UpdateStatus update={update} onInstall={() => act(() => host.installUpdate())} />}
+      </p>
+      {folder && (
+        <p className="hint update-folder" title={folder}>
+          {folder}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function UpdateStatus({ update, onInstall }: { update: UpdateState; onInstall: () => void }) {
+  switch (update.state) {
+    case 'unavailable':
+      return null
+    case 'off':
+      return <>Build {update.build}. Wähle einen Ordner, in dem neue Builds als ZIP liegen (z. B. einen geteilten Dropbox-Ordner).</>
+    case 'current':
+      return <>Build {update.build} ist aktuell{update.checked ? ` · geprüft ${clock(update.checked)}` : ''}.</>
+    case 'available':
+      return (
+        <>
+          Build {update.offer.build} ist da ·{' '}
+          <button className="link" onClick={onInstall}>
+            Jetzt aktualisieren
+          </button>
+          <span className="muted"> (läuft: Build {update.build})</span>
+        </>
+      )
+    case 'installing':
+      return <>Build {update.offer.build} wird installiert – MAID beendet sich und startet neu …</>
+    case 'failed':
+      return <span className="error">{update.message}</span>
+  }
+}
+
+const clock = (iso: string) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })

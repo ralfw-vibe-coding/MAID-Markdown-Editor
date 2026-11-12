@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { channels, type MaidHost, type MenuCommand } from '../shared/host'
+import { channels, type MaidHost, type MenuCommand, type UpdateState } from '../shared/host'
 
 function subscribe<T>(channel: string, handler: (value: T) => void): () => void {
   const listener = (_e: IpcRendererEvent, value: T) => handler(value)
@@ -25,6 +25,11 @@ const host: MaidHost = {
   closeConfirmed: () => ipcRenderer.send(channels.closeConfirmed),
   onMenu: (handler) => subscribe<MenuCommand>(channels.menu, handler),
   onOpenPath: (handler) => subscribe<string>(channels.openPath, handler),
+  updateState: () => ipcRenderer.invoke(channels.updateState),
+  updateFolder: (choose) => ipcRenderer.invoke(channels.updateFolder, choose),
+  checkForUpdate: () => ipcRenderer.invoke(channels.updateCheck),
+  installUpdate: () => ipcRenderer.invoke(channels.updateInstall),
+  onUpdate: (handler) => subscribe<UpdateState>(channels.update, handler),
   ready: () => ipcRenderer.send(channels.ready),
 }
 

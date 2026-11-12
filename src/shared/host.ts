@@ -65,6 +65,52 @@ export const DEFAULT_SETTINGS: Settings = {
   writingLine: 0,
 }
 
+/** Ein neuerer Build im Update-Ordner. */
+export type UpdateOffer = { version: string; build: number; commit?: string; file: string }
+
+/**
+ * Aktualisierung aus einem Ordner (z. B. einem geteilten Dropbox-Ordner).
+ * `build` ist der laufende Build. „unavailable“: MAID aus dem Repo oder
+ * die Web-Vorschau – die aktualisieren sich nicht.
+ */
+export type UpdateState =
+  | { state: 'unavailable' }
+  | { state: 'off'; build: number }
+  | { state: 'current'; build: number; folder: string; checked: string }
+  | { state: 'available'; build: number; folder: string; checked: string; offer: UpdateOffer }
+  | { state: 'installing'; build: number; folder: string; offer: UpdateOffer }
+  /** `message` nennt den Schritt und den Grund. */
+  | { state: 'failed'; build: number; folder: string; message: string }
+
+const isOffer = (o: unknown): o is UpdateOffer => {
+  const v = o as UpdateOffer | null
+  return !!v && typeof v.version === 'string' && typeof v.build === 'number' && typeof v.file === 'string'
+}
+
+/** Prüft eine Antwort des Hauptprozesses; alles Unerwartete zählt als „unavailable“. */
+export function asUpdateState(value: unknown): UpdateState {
+  const v = value as Record<string, unknown> | null
+  const unavailable: UpdateState = { state: 'unavailable' }
+  if (!v || typeof v !== 'object' || typeof v.state !== 'string') return unavailable
+  if (v.state === 'unavailable') return unavailable
+  if (typeof v.build !== 'number') return unavailable
+  const build = v.build
+  if (v.state === 'off') return { state: 'off', build }
+  if (typeof v.folder !== 'string') return unavailable
+  const folder = v.folder
+  switch (v.state) {
+    case 'current':
+      return typeof v.checked === 'string' ? { state: 'current', build, folder, checked: v.checked } : unavailable
+    case 'available':
+      return typeof v.checked === 'string' && isOffer(v.offer) ? { state: 'available', build, folder, checked: v.checked, offer: v.offer } : unavailable
+    case 'installing':
+      return isOffer(v.offer) ? { state: 'installing', build, folder, offer: v.offer } : unavailable
+    case 'failed':
+      return typeof v.message === 'string' ? { state: 'failed', build, folder, message: v.message } : unavailable
+  }
+  return unavailable
+}
+
 export type ClaudeInfo = { path: string; version: string | null; error?: string }
 
 export type AiResult = { ok: true; data: unknown } | { ok: false; error: string }
@@ -101,6 +147,14 @@ export interface MaidHost {
   writeVersions(documentPath: string, content: string): Promise<void>
   /** Öffnet einen Link (http, https, mailto) im Standardprogramm, z. B. dem Browser. */
   openExternal(url: string): void
+  /** Aktualisierung aus einem Ordner: Zustand, Ordner wählen (Systemdialog) oder entfernen, prüfen, installieren. */
+  updateState(): Promise<UpdateState>
+  /** `true`: Ordner im Systemdialog wählen; `null`: Update-Ordner entfernen. */
+  updateFolder(choose: true | null): Promise<UpdateState>
+  checkForUpdate(): Promise<UpdateState>
+  /** Entpackt, prüft die Signatur, beendet MAID und tauscht die App aus. */
+  installUpdate(): Promise<UpdateState>
+  onUpdate(handler: (state: UpdateState) => void): () => void
   /** Meldet dem Hauptprozess, dass die Oberfläche Befehle entgegennehmen kann. */
   ready(): void
 }
@@ -140,4 +194,9 @@ export const channels = {
   readVersions: 'file:read-versions',
   writeVersions: 'file:write-versions',
   openExternal: 'shell:open-external',
+  updateState: 'update-state',
+  updateFolder: 'update-folder',
+  updateCheck: 'update-check',
+  updateInstall: 'update-install',
+  update: 'update',
 } as const

@@ -1,11 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { channels, isPlainTextPath, LEGACY_VERSIONS_SUFFIX, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile } from '../shared/host'
+import { channels, isPlainTextPath, LEGACY_VERSIONS_SUFFIX, SIDECAR_SUFFIX, VERSIONS_SUFFIX, type AiRequest, type DiscardChoice, type DocumentState, type Settings, type MenuCommand, type OpenedFile, type UpdateState } from '../shared/host'
 import { askClaude, claudeInfo } from './ai'
 import { getSettings, updateSettings } from './settings'
 import { handleLocalFileScheme, registerLocalFileScheme, saveImage } from './images'
 import { clearRecentDocuments, noteRecentDocument, recentDocuments } from './recent'
+import type { Updater } from './updater'
+import { startUpdates } from './updates'
 
 /** Zustand eines Dokumentfensters – jedes Fenster hat genau ein Dokument. */
 type DocWindow = {
@@ -73,6 +75,31 @@ function openPath(path: string) {
   const candidate = focusedDocWindow() ?? [...windows.values()].at(-1)
   if (candidate?.pristine) deliver(candidate, path)
   else createWindow(path)
+}
+
+/** Aktualisierung aus dem Update-Ordner; entsteht in `whenReady` (userData hängt vom App-Namen ab). */
+let updater: Promise<Updater> | null = null
+const updateState = async (): Promise<UpdateState> => (updater ? (await updater).state() : { state: 'unavailable' })
+/** Letzter gemeldeter Zustand – fürs App-Menü, das synchron gebaut wird. */
+let lastUpdate: UpdateState = { state: 'unavailable' }
+/** Build im Update-Ordner, den das App-Menü gerade anbietet. */
+let menuOffer: number | null = null
+const offeredBuild = (s: UpdateState) => (s.state === 'available' ? s.offer.build : null)
+
+function onUpdateState(state: UpdateState) {
+  // Scheitert eine Installation (z. B. aus dem App-Menü gestartet), soll man es auch ohne Einstellungen sehen.
+  if (state.state === 'failed' && lastUpdate.state === 'installing') void dialog.showMessageBox({ type: 'warning', message: 'Aktualisierung fehlgeschlagen', detail: state.message })
+  lastUpdate = state
+  for (const dw of windows.values()) dw.win.webContents.send(channels.update, state)
+  if (offeredBuild(state) !== menuOffer) buildMenu()
+}
+
+async function chooseUpdateFolder(e: IpcMainInvokeEvent): Promise<UpdateState> {
+  const parent = BrowserWindow.fromWebContents(e.sender)
+  const options: OpenDialogOptions = { title: 'Update-Ordner wählen', buttonLabel: 'Wählen', properties: ['openDirectory', 'createDirectory'] }
+  const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+  if (result.canceled || !result.filePaths[0]) return updateState()
+  return (await updater!).setFolder(result.filePaths[0])
 }
 
 const MARKDOWN_FILTER = { name: 'Markdown', extensions: ['md', 'markdown'] }
@@ -278,6 +305,14 @@ function registerIpc() {
 
   ipcMain.on(channels.openExternal, (_e, url: string) => openExternalLink(url))
 
+  ipcMain.handle(channels.updateState, () => updateState())
+  ipcMain.handle(channels.updateFolder, async (e, choose: true | null) => {
+    if (!updater) return updateState()
+    return choose === true ? chooseUpdateFolder(e) : (await updater).setFolder(null)
+  })
+  ipcMain.handle(channels.updateCheck, async () => (updater ? (await updater).check() : updateState()))
+  ipcMain.handle(channels.updateInstall, async () => (updater ? (await updater).install() : updateState()))
+
   ipcMain.on(channels.documentState, (e, state: DocumentState) => {
     const dw = senderWindow(e)
     if (!dw) return
@@ -307,6 +342,7 @@ function registerIpc() {
 
 function buildMenu() {
   menuPlainText = focusedIsPlainText()
+  menuOffer = offeredBuild(lastUpdate)
   // Formatieren erzeugt Markdown – bei reinem Text gibt es das Menü nicht.
   const format: MenuItemConstructorOptions = {
     label: 'Format',
@@ -325,6 +361,9 @@ function buildMenu() {
       label: app.name,
       submenu: [
         { role: 'about', label: `Über ${app.name}` },
+        ...(menuOffer !== null
+          ? [{ label: `Auf Build ${menuOffer} aktualisieren …`, click: () => void updater?.then((u) => u.install()) } satisfies MenuItemConstructorOptions]
+          : []),
         { type: 'separator' },
         { label: 'Einstellungen …', accelerator: 'CmdOrCtrl+,', click: () => send('settings') },
         { type: 'separator' },
@@ -440,6 +479,7 @@ app.whenReady().then(() => {
     if (/\.(md|markdown|txt)$/i.test(arg)) startupPaths.push(arg)
   }
   handleLocalFileScheme()
+  updater = startUpdates(onUpdateState)
   registerIpc()
   buildMenu()
   // Je Datei ein Fenster; ohne Datei ein leeres.

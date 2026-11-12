@@ -365,3 +365,24 @@ button.chat-title.editable:hover { background: #f1efe9; }
 .editor .cm-search button[name=close] { top: 6px; right: 8px; color: var(--muted); font-size: 16px; cursor: pointer; }
 .editor .cm-searchMatch { background: rgba(250, 204, 21, .35); outline: none; }
 .editor .cm-searchMatch-selected { background: rgba(194, 65, 12, .25); }
+
+/* Einstellungen → Aktualisierung */
+.modal .update-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.modal .update-status .link {
+  padding: 0;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+}
+.modal .update-status .error {
+  color: #b91c1c;
+}
+.modal .update-folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

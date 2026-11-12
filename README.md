@@ -131,7 +131,20 @@ npm run app -- -- "/Pfad/zu/Text.md"
 npm run install-app
 ```
 
-baut eine eigenständige `MAID.app` (electron-builder, ad hoc signiert), legt sie nach `/Applications` und macht sie zum Standardprogramm für `.md` und `.markdown` – ein Doppelklick im Finder öffnet die Datei dann in MAID. Eine laufende installierte MAID wird dafür vorher beendet (sie speichert dabei). Nur bauen, ohne zu installieren: `npm run dist` (Ergebnis in `dist/`). Dafür ist **Xcode 26** oder neuer nötig: Das App-Icon liegt im Icon-Composer-Format vor (`resources/MAID.icon`), damit macOS 26 es nicht in eine graue Kachel setzt.
+baut eine eigenständige `MAID.app` (electron-builder, signiert mit einem festen Code-Signing-Zertifikat, siehe unten), legt sie nach `/Applications` und macht sie zum Standardprogramm für `.md` und `.markdown` – ein Doppelklick im Finder öffnet die Datei dann in MAID. Eine laufende installierte MAID wird dafür vorher beendet (sie speichert dabei). Nur bauen, ohne zu installieren: `npm run package` (Ergebnis in `dist/`, dazu ein ZIP für den Update-Ordner). Dafür ist **Xcode 26** oder neuer nötig: Das App-Icon liegt im Icon-Composer-Format vor (`resources/MAID.icon`), damit macOS 26 es nicht in eine graue Kachel setzt.
+
+### Aktualisieren aus einem Ordner
+
+MAID aktualisiert sich selbst aus einem Ordner – ohne Apple-Entwicklerprogramm, ohne Notarisierung, ohne Server. Für Freunde und Kollegen ist das ein geteilter Dropbox-Ordner: Dropbox setzt kein Quarantäne-Attribut, also startet die neue App ohne „Dennoch öffnen“.
+
+- **Packen:** `npm run package` baut die App, schreibt Build-Nummer (Zahl der Commits), Version, Commit und Chip hinein, signiert sie und legt `dist/MAID-<version>-<build>-<chip>.zip` an. Dieses ZIP kommt in den geteilten Ordner.
+- **Einstellen (je Mac):** Einstellungen → *Aktualisierung* → „Ordner wählen …“. Der Pfad liegt lokal in `~/Library/Application Support/MAID/update.json`. Als Entwickler trägst du einfach `dist/` des Repos ein.
+- **Prüfen:** beim Start, alle 30 Minuten und auf „Jetzt prüfen“. MAID liest aus jedem ZIP nur die Build-Angaben (ohne zu entpacken) und bietet den höchsten neueren Build für den eigenen Chip an – in den Einstellungen und im App-Menü („Auf Build … aktualisieren …“).
+- **Installieren:** MAID entpackt neben sich (`.MAID Update` im selben Ordner), prüft, dass die neue App gültig signiert ist und die Signatur-Anforderung der installierten erfüllt (gleiches Zertifikat, gleiche Bundle-ID), beendet sich, tauscht das Bundle aus und startet neu. Klappt der Tausch nicht, kommt die alte App zurück.
+- **Signatur:** Jeder Build muss mit **demselben** Zertifikat signiert sein; ein selbst erstelltes Code-Signing-Zertifikat aus der Schlüsselbundverwaltung genügt (Zertifikatsassistent → Zertifikat erstellen → Typ „Code-Signierung“). Welches, steht in `scripts/package.mjs` (oder `MAID_SIGN_IDENTITY`). Ad hoc signierte Builds können sich nicht aktualisieren.
+- **Einführung:** Den ersten Build mit Updater bekommt jeder noch einmal von Hand (ZIP entpacken, nach Programme ziehen) und wählt danach einmal den Update-Ordner.
+
+MAID aus dem Repo (`npm run app`) aktualisiert sich nicht; dort fehlt die Karte.
 
 Entwicklungsversion (`npm run app`) und installierte App teilen sich die Einstellungen; die Anordnung der Spalten merkt sich jede für sich.
 
@@ -143,11 +156,12 @@ Entwicklungsversion (`npm run app`) und installierte App teilen sich die Einstel
 | `npm test` | Tests (Vitest) |
 | `npm run typecheck` | TypeScript prüfen |
 | `npm run web` | nur die Oberfläche im Browser, ohne Dateizugriff und KI |
-| `npm run install-app` | App bauen, nach `/Applications` installieren, Standard für Markdown |
+| `npm run package` | App bauen und signieren, ZIP für den Update-Ordner nach `dist/` |
+| `npm run install-app` | dazu nach `/Applications` installieren, Standard für Markdown |
 
 Aufbau:
 
-- `src/main` – Electron-Hauptprozess: Fenster, Menüs, Dateien, Claude-CLI-Aufruf, Einstellungen, lokales Bildprotokoll
+- `src/main` – Electron-Hauptprozess: Fenster, Menüs, Dateien, Claude-CLI-Aufruf, Einstellungen, lokales Bildprotokoll, Aktualisierung aus einem Ordner
 - `src/preload` – Brücke zwischen Hauptprozess und Oberfläche
 - `src/renderer` – Oberfläche (React, CodeMirror 6, unified/remark)
   - `render/` – eigener Markdown-Renderer mit zeichengenauer Quellzuordnung
